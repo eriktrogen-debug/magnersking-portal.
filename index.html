@@ -1,0 +1,2876 @@
+<!DOCTYPE html>
+<html lang="sv">
+<!-- PWA Manifest & App-Ikon (Fungerar på iOS, Android, PC & Smart-TV) -->
+  <link rel="manifest" href="manifest.json" id="pwa-manifest" />
+  <script>
+    (function() {
+      const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+        <rect width="512" height="512" rx="115" fill="#050705"/>
+        <rect x="16" y="16" width="480" height="480" rx="100" fill="none" stroke="#E50914" stroke-width="12" stroke-opacity="0.6"/>
+        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="900" font-size="260" fill="#E50914">X</text>
+        <text x="50%" y="22%" dominant-baseline="middle" text-anchor="middle" font-size="90">👑</text>
+      </svg>`;
+      const iconUrl = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgIcon);
+
+      // Sätt Apple Touch Icon för iPhone / iPad
+      const appleIcon = document.createElement('link');
+      appleIcon.rel = 'apple-touch-icon';
+      appleIcon.href = iconUrl;
+      document.head.appendChild(appleIcon);
+
+      // Sätt vanlig Favicon
+      const favIcon = document.createElement('link');
+      favIcon.rel = 'icon';
+      favIcon.href = iconUrl;
+      document.head.appendChild(favIcon);
+
+      // Skapa dynamiskt manifest om manifest.json saknas lokalt
+      const dynamicManifest = {
+        name: "MAGNERSKING - Royal IPTVX",
+        short_name: "MAGNERSKING",
+        description: "Next-Gen Cloud & Local Stream Suite",
+        start_url: "./index.html",
+        display: "standalone",
+        orientation: "any",
+        background_color: "#000000",
+        theme_color: "#000000",
+        icons: [
+          {
+            src: iconUrl,
+            sizes: "512x512",
+            type: "image/svg+xml",
+            purpose: "any maskable"
+          }
+        ]
+      };
+      const blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/json' });
+      document.getElementById('pwa-manifest').setAttribute('href', URL.createObjectURL(blob));
+    })();
+  </script>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>MAGNERSKING - IPTVX & Royal Cinema</title>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- HLS.js för .m3u8 videoströmmar -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <!-- MPEGTS.js för råa IPTV .ts-strömmar -->
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.js"></script>
+  
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --accent: #E50914;
+      --accent-gold: #F59E0B;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      background-color: #000000;
+      color: #FFFFFF;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      height: 100%;
+      overflow: hidden;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .thin-scrollbar::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .thin-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .thin-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 9999px;
+    }
+    .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(229, 9, 20, 0.8);
+    }
+    /* Gigantiska Topp-10 siffror i Netflix/IPTVX-stil */
+    .rank-number {
+      font-size: 9.5rem;
+      line-height: 0.8;
+      font-weight: 900;
+      color: #000000;
+      -webkit-text-stroke: 3px #52525B;
+      text-shadow: 0 10px 30px rgba(0,0,0,0.9);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      letter-spacing: -0.06em;
+    }
+    .hero-vignette {
+      background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0.95) 85%, #000000 100%),
+                  linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, rgba(0,0,0,0.85) 100%);
+    }
+    .tv-focus:focus-visible {
+      outline: 3px solid #E50914;
+      outline-offset: 3px;
+      transform: scale(1.04);
+    }
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.9); }
+    }
+    .live-dot {
+      animation: pulse-live 1.8s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // --- SUPABASE KONFIGURATION ---
+    const SUPABASE_URL = 'https://lsysoujotuheynaxzdru.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_4eiiaTpWbpoNFsqZsP8rbQ_H46OkHMk';
+    const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+    // --- DEMODATA INNAN SPELLISTA LADDAS ---
+    const INITIAL_CHANNELS = [
+      {
+        id: 'ch_demo_svt1',
+        tvgId: 'svt1.svt.se',
+        name: 'SVT 1 SE FHD',
+        group: 'Sweden',
+        quality: 'FHD',
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/SVT1_logo_2016.svg/512px-SVT1_logo_2016.svg.png',
+        url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        type: 'live'
+      },
+      {
+        id: 'ch_demo_tv4',
+        tvgId: 'tv4.se',
+        name: 'TV4 SE FHD',
+        group: 'Sweden',
+        quality: 'FHD',
+        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/TV4_logo_2018.svg/512px-TV4_logo_2018.svg.png',
+        url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        type: 'live'
+      }
+    ];
+
+    const DEFAULT_FAV_LISTS = [
+      { id: 'fav_se_fhd', name: '1 Sverige FHD', filterGroup: 'Sweden', filter: 'FHD', channelIds: [] }
+    ];
+
+    const GENRE_CARDS = [
+      { id: 'Action', label: 'Action', keywords: ['action', 'thriller', 'krig', 'war', 'crime', 'kriminal'], gradient: 'from-red-900/80 via-orange-900/60 to-black', icon: '💥' },
+      { id: 'Komedi', label: 'Komedi', keywords: ['comedy', 'komedi', 'standup', 'humor'], gradient: 'from-amber-700/80 via-yellow-900/60 to-black', icon: '😂' },
+      { id: 'Drama', label: 'Drama & Romantik', keywords: ['drama', 'romance', 'romantik'], gradient: 'from-purple-900/80 via-pink-900/60 to-black', icon: '🎭' },
+      { id: 'Barn', label: 'Barn & Familj', keywords: ['kids', 'barn', 'family', 'disney', 'anim', 'cartoon'], gradient: 'from-emerald-800/80 via-teal-900/60 to-black', icon: '🎈' },
+      { id: 'SciFi', label: 'Sci-Fi & Fantasy', keywords: ['sci-fi', 'scifi', 'fantasy', 'horror', 'skräck'], gradient: 'from-blue-900/80 via-indigo-950/60 to-black', icon: '🚀' },
+      { id: 'Nordic', label: 'Nordiskt & Svenskt', keywords: ['sweden', 'sverige', 'nordic', 'svensk', 'se ', 'swe'], gradient: 'from-sky-800/80 via-blue-950/60 to-black', icon: '🇸🇪' },
+      { id: '4K', label: '4K UHD & Dolby Vision', keywords: ['4k', 'uhd', 'dolby', 'hevc'], gradient: 'from-yellow-700/80 via-neutral-900 to-black', icon: '✨' },
+      { id: 'Doc', label: 'Dokumentär', keywords: ['doc', 'dokument', 'nature', 'history'], gradient: 'from-green-900/80 via-stone-900 to-black', icon: '🌍' }
+    ];
+
+    const YEAR_CARDS = ['2026', '2025', '2024', '2023', '2022', '2021', '2020'];
+
+    // --- INDEXEDDB FÖR LOKAL LAGRING AV STORA M3U-LISTOR ---
+    const DB_NAME = 'MagnersKingCacheDB_v3';
+    const DB_STORE = 'UserMediaCache';
+
+    function openLocalDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) return reject('IndexedDB stöds ej');
+        const req = window.indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(DB_STORE)) {
+            db.createObjectStore(DB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function saveLocalCache(key, data) {
+      try {
+        const db = await openLocalDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(DB_STORE, 'readwrite');
+          tx.objectStore(DB_STORE).put(data, key);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (e) {
+        console.warn('Kunde ej spara lokal cache:', e);
+      }
+    }
+
+    async function loadLocalCache(key) {
+      try {
+        const db = await openLocalDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(DB_STORE, 'readonly');
+          const req = tx.objectStore(DB_STORE).get(key);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // --- HJÄLPFUNKTIONER FÖR METADATA, KVALITET & PARSNING ---
+    function extractMetadata(name, group) {
+      let quality = '';
+      if (/\b(4k|uhd|2160p)\b/i.test(name) || /\b(4k|uhd)\b/i.test(group)) quality = '4K';
+      else if (/\b(fhd|1080p)\b/i.test(name)) quality = 'FHD';
+      else if (/\b(hd|720p)\b/i.test(name)) quality = 'HD';
+      else if (/\b(sd)\b/i.test(name)) quality = 'SD';
+
+      const yearMatch = name.match(/\b(19\d{2}|20[0-2]\d)\b/);
+      const year = yearMatch ? yearMatch[1] : null;
+
+      const seMatch = name.match(/^(.*?)\s*[-\s]*S(\d{1,2})\s*E(\d{1,3})/i);
+      const seriesTitle = seMatch ? seMatch[1].replace(/[\(\[\-\_]+$/, '').trim() : null;
+      const season = seMatch ? parseInt(seMatch[2], 10) : null;
+      const episode = seMatch ? parseInt(seMatch[3], 10) : null;
+
+      // Skapa ett konsekvent betyg (7.1 - 9.2) utifrån titelns tecken för snygg presentation
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      const rating = (7.0 + (Math.abs(hash) % 23) / 10).toFixed(1).replace('.', ',');
+
+      return { quality, year, seriesTitle, season, episode, rating };
+    }
+
+    function parseXmltvDate(dateStr) {
+      if (!dateStr || dateStr.length < 14) return null;
+      const y = parseInt(dateStr.substring(0, 4), 10);
+      const m = parseInt(dateStr.substring(4, 6), 10) - 1;
+      const d = parseInt(dateStr.substring(6, 8), 10);
+      const h = parseInt(dateStr.substring(8, 10), 10);
+      const min = parseInt(dateStr.substring(10, 12), 10);
+      const s = parseInt(dateStr.substring(12, 14), 10);
+
+      const tzMatch = dateStr.substring(14).trim().match(/^([+-])(\d{2})(\d{2})/);
+      if (tzMatch) {
+        const sign = tzMatch[1] === '+' ? 1 : -1;
+        const tzHours = parseInt(tzMatch[2], 10);
+        const tzMins = parseInt(tzMatch[3], 10);
+        const offsetMs = sign * (tzHours * 60 + tzMins) * 60 * 1000;
+        const utcMs = Date.UTC(y, m, d, h, min, s);
+        return new Date(utcMs - offsetMs);
+      }
+      return new Date(y, m, d, h, min, s);
+    }
+
+    function formatTime(dateObj) {
+      if (!dateObj) return '';
+      const d = dateObj instanceof Date ? dateObj : new Date(dateObj);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function parseXMLTV(xmlText) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+      const programmes = xmlDoc.getElementsByTagName('programme');
+      const epgMap = {};
+      const now = new Date();
+      const maxFuture = new Date(now.getTime() + 18 * 60 * 60 * 1000);
+
+      for (let i = 0; i < programmes.length; i++) {
+        const prog = programmes[i];
+        const channelId = (prog.getAttribute('channel') || '').toLowerCase();
+        if (!channelId) continue;
+
+        const stopDate = parseXmltvDate(prog.getAttribute('stop'));
+        if (stopDate && stopDate < now) continue;
+
+        const startDate = parseXmltvDate(prog.getAttribute('start'));
+        if (startDate && startDate > maxFuture) continue;
+
+        const titleEl = prog.getElementsByTagName('title')[0];
+        const descEl = prog.getElementsByTagName('desc')[0];
+
+        const title = titleEl ? titleEl.textContent : 'Okänt program';
+        const desc = descEl ? descEl.textContent : '';
+
+        if (!epgMap[channelId]) epgMap[channelId] = [];
+        epgMap[channelId].push({ start: startDate, stop: stopDate, title, desc });
+      }
+
+      Object.keys(epgMap).forEach((chId) => {
+        epgMap[chId].sort((a, b) => a.start - b.start);
+      });
+
+      return epgMap;
+    }
+
+    function parseM3U(content) {
+      const lines = content.split('\n');
+      const live = [];
+      const movies = [];
+      const series = [];
+      let detectedEpgUrl = '';
+      
+      let currentName = '';
+      let currentGroup = 'Övriga kanaler';
+      let currentLogo = '';
+      let currentTvgId = '';
+      let currentTvgName = '';
+      const seenIds = new Set();
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        if (i === 0 && line.startsWith('#EXTM3U')) {
+          const urlTvgMatch = line.match(/(?:url-tvg|x-tvg-url)="([^"]+)"/i);
+          if (urlTvgMatch && urlTvgMatch[1]) {
+            detectedEpgUrl = urlTvgMatch[1].split(',')[0].trim();
+          }
+        }
+
+        if (line.startsWith('#EXTINF:')) {
+          const commaIndex = line.lastIndexOf(',');
+          currentName = commaIndex !== -1 ? line.substring(commaIndex + 1).trim() : 'Okänd kanal';
+          
+          const groupIdx = line.indexOf('group-title="');
+          if (groupIdx !== -1) {
+            const start = groupIdx + 13;
+            const end = line.indexOf('"', start);
+            if (end !== -1) currentGroup = line.substring(start, end);
+          }
+
+          const logoIdx = line.indexOf('tvg-logo="');
+          if (logoIdx !== -1) {
+            const start = logoIdx + 10;
+            const end = line.indexOf('"', start);
+            if (end !== -1) currentLogo = line.substring(start, end);
+          }
+
+          const idIdx = line.indexOf('tvg-id="');
+          if (idIdx !== -1) {
+            const start = idIdx + 8;
+            const end = line.indexOf('"', start);
+            if (end !== -1) currentTvgId = line.substring(start, end);
+          }
+
+          const nameIdx = line.indexOf('tvg-name="');
+          if (nameIdx !== -1) {
+            const start = nameIdx + 10;
+            const end = line.indexOf('"', start);
+            if (end !== -1) currentTvgName = line.substring(start, end);
+          }
+        } else if (line[0] !== '#') {
+          const lowerGroup = currentGroup.toLowerCase();
+          const lowerUrl = line.toLowerCase();
+          const lowerName = currentName.toLowerCase();
+
+          let baseId = 'id_' + (currentGroup + '_' + currentName).toLowerCase().replace(/[^a-z0-9]/g, '');
+          let uniqueId = baseId;
+          let counter = 1;
+          while (seenIds.has(uniqueId)) {
+            uniqueId = `${baseId}_${counter++}`;
+          }
+          seenIds.add(uniqueId);
+
+          const meta = extractMetadata(currentName, currentGroup);
+
+          let itemType = 'live';
+          if (
+            lowerGroup.includes('serie') || 
+            lowerGroup.includes('series') || 
+            lowerUrl.includes('/series/') || 
+            /s\d{1,2}\s*e\d{1,3}/i.test(lowerName)
+          ) {
+            itemType = 'series';
+          } else if (
+            lowerGroup.includes('vod') || 
+            lowerGroup.includes('movie') || 
+            lowerGroup.includes('film') || 
+            lowerUrl.includes('/movie/') || 
+            lowerUrl.endsWith('.mp4') || 
+            lowerUrl.endsWith('.mkv') || 
+            lowerUrl.endsWith('.avi')
+          ) {
+            itemType = 'movies';
+          }
+
+          const item = {
+            id: uniqueId,
+            tvgId: (currentTvgId || currentTvgName || currentName).toLowerCase(),
+            name: currentName,
+            group: currentGroup || 'Övriga kanaler',
+            logo: currentLogo,
+            url: line,
+            type: itemType,
+            quality: meta.quality,
+            year: meta.year,
+            rating: meta.rating,
+            seriesTitle: meta.seriesTitle,
+            season: meta.season,
+            episode: meta.episode
+          };
+
+          if (itemType === 'series') series.push(item);
+          else if (itemType === 'movies') movies.push(item);
+          else live.push(item);
+
+          currentName = '';
+          currentGroup = 'Övriga kanaler';
+          currentLogo = '';
+          currentTvgId = '';
+          currentTvgName = '';
+        }
+      }
+      return { live, movies, series, detectedEpgUrl };
+    }
+
+    // --- KOMPONENT: HORISONTELL KARUSELLRAD (NETFLIX / IPTVX STIL) ---
+    function MediaCarouselRow({ title, items, onSelect, onFavClick, onExpand, type = 'poster', favItemIds, watchProgressMap, getChannelEpg }) {
+      const scrollRef = useRef(null);
+
+      if (!items || items.length === 0) return null;
+
+      const scroll = (dir) => {
+        if (!scrollRef.current) return;
+        const amount = window.innerWidth * 0.7;
+        scrollRef.current.scrollBy({ left: dir === 'left' ? -amount : amount, behavior: 'smooth' });
+      };
+
+      return (
+        <section className="space-y-2.5 relative group/row">
+          <div className="flex items-center justify-between px-4 sm:px-8">
+            <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
+              {title}
+            </h2>
+            {onExpand && (
+              <button
+                onClick={onExpand}
+                className="text-xs sm:text-sm font-bold text-[#E50914] hover:text-red-400 transition"
+              >
+                Expandera
+              </button>
+            )}
+          </div>
+
+          <div className="relative">
+            {/* Vänster/Höger pilar på Desktop */}
+            <button
+              onClick={() => scroll('left')}
+              className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-20 w-10 h-24 rounded-xl bg-black/80 hover:bg-[#E50914] text-white items-center justify-center opacity-0 group-hover/row:opacity-100 transition shadow-xl border border-white/10"
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => scroll('right')}
+              className="hidden md:flex absolute right-1 top-1/2 -translate-y-1/2 z-20 w-10 h-24 rounded-xl bg-black/80 hover:bg-[#E50914] text-white items-center justify-center opacity-0 group-hover/row:opacity-100 transition shadow-xl border border-white/10"
+            >
+              ›
+            </button>
+
+            <div
+              ref={scrollRef}
+              className="flex items-stretch gap-3.5 overflow-x-auto no-scrollbar px-4 sm:px-8 py-1 scroll-smooth"
+            >
+              {items.slice(0, 35).map((item, idx) => {
+                const isFav = favItemIds?.has(item.id);
+                const prog = watchProgressMap?.[item.id];
+                const progPct = prog && prog.duration > 0 ? Math.min(98, Math.round((prog.time / prog.duration) * 100)) : 0;
+
+                // 1. TOPP 10 MED STORA SIFFROR
+                if (type === 'rank') {
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onSelect(item)}
+                      className="shrink-0 flex items-end cursor-pointer group relative pl-10 sm:pl-12 pr-1 py-1"
+                    >
+                      <span className="rank-number absolute left-0 bottom-0 z-0 select-none pointer-events-none group-hover:scale-105 transition">
+                        {idx + 1}
+                      </span>
+                      <div className="relative z-10 w-28 sm:w-36 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 border border-white/15 group-hover:border-[#E50914] transition shadow-2xl">
+                        {item.logo ? (
+                          <img src={item.logo} alt={item.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-zinc-800 to-zinc-950">
+                            <span className="text-2xl mb-1">🎬</span>
+                            <span className="text-[11px] font-bold text-white line-clamp-3">{item.name}</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
+                        <div className="absolute bottom-2 left-2 right-2 flex flex-col items-center">
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E50914] text-white shadow">
+                            {item.type === 'series' ? 'SERIE' : 'TOPPVAL'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 2. SENAST SEDDA LIVE-KANALER (IPTVX KORT-STIL)
+                if (type === 'live-card') {
+                  const epg = getChannelEpg ? getChannelEpg(item) : null;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onSelect(item)}
+                      className="shrink-0 w-60 sm:w-64 rounded-2xl bg-[#111214] border border-white/10 hover:border-[#E50914] p-4 flex flex-col justify-between cursor-pointer transition group shadow-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center p-1.5 shrink-0">
+                          {item.logo ? (
+                            <img src={item.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                          ) : (
+                            <span className="text-sm font-bold text-[#E50914]">TV</span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-xs sm:text-sm font-bold text-white truncate">{item.name}</h3>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {item.quality && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/25 text-zinc-300">
+                                {item.quality}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-zinc-400 truncate">{item.group}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-white/5 space-y-1.5">
+                        {epg?.currentProg ? (
+                          <>
+                            <p className="text-[10px] text-zinc-400">
+                              {formatTime(epg.currentProg.start)} - {formatTime(epg.currentProg.stop)}
+                            </p>
+                            <p className="text-xs font-bold text-white truncate">{epg.currentProg.title}</p>
+                            <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                              <div className="bg-[#E50914] h-full rounded-full" style={{ width: `${epg.progress}%` }} />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[10px] text-zinc-500">Direktsändning</p>
+                            <p className="text-xs font-medium text-zinc-400">EPG inte tillgänglig</p>
+                            <div className="w-full h-1 bg-white/5 rounded-full" />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 3. BREDA LANDSKAPSKORT ("FORTSÄTT ATT TITTA" / "PRISBELÖNTA")
+                if (type === 'landscape') {
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onSelect(item)}
+                      className="shrink-0 w-64 sm:w-72 aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-white/10 hover:border-[#E50914] relative cursor-pointer group transition shadow-xl"
+                    >
+                      {item.logo ? (
+                        <img src={item.logo} alt={item.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black flex items-center justify-center">
+                          <span className="text-3xl opacity-30">▶</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+
+                      {/* Topp-badge */}
+                      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                        {item.quality && (
+                          <span className="bg-black/75 backdrop-blur-md text-[10px] font-extrabold px-2 py-0.5 rounded border border-white/15 text-amber-400">
+                            {item.quality}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Spela-ikon i mitten */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-11 h-11 rounded-full bg-black/60 border border-white/30 flex items-center justify-center text-white group-hover:bg-[#E50914] group-hover:border-[#E50914] group-hover:scale-110 transition">
+                          ▶
+                        </div>
+                      </div>
+
+                      <div className="absolute bottom-2.5 left-3 right-3">
+                        <h3 className="text-xs sm:text-sm font-extrabold text-white truncate drop-shadow">{item.name}</h3>
+                        <p className="text-[10px] text-zinc-300 truncate">{item.group}</p>
+                        {progPct > 0 && (
+                          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden mt-1.5">
+                            <div className="bg-[#E50914] h-full" style={{ width: `${progPct}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 4. VERTIKALA BIO-POSTERS (STANDARD VOD / SERIER)
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => onSelect(item)}
+                    className="shrink-0 w-32 sm:w-40 aspect-[2/3] rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#E50914] relative cursor-pointer group transition-all duration-200 hover:scale-[1.03] shadow-lg flex flex-col justify-end"
+                  >
+                    {item.logo ? (
+                      <img src={item.logo} alt={item.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-b from-zinc-800/40 to-black">
+                        <span className="text-3xl mb-2 opacity-40">{item.type === 'series' ? '🍿' : '🎬'}</span>
+                        <span className="text-xs font-bold text-zinc-200 line-clamp-3">{item.name}</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-90" />
+
+                    {/* Stjärnknapp uppe i hörnet */}
+                    {onFavClick && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFavClick(item);
+                        }}
+                        className={`absolute top-2 right-2 z-20 w-7 h-7 rounded-full flex items-center justify-center text-xs transition ${
+                          isFav
+                            ? 'bg-[#E50914] text-white shadow'
+                            : 'bg-black/60 text-zinc-300 opacity-0 group-hover:opacity-100 hover:bg-black'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    )}
+
+                    <div className="relative z-10 p-2.5 flex flex-col items-center text-center w-full">
+                      <h3 className="text-[11px] font-bold text-white line-clamp-2 leading-tight mb-1.5 drop-shadow">
+                        {item.seriesTitle || item.name}
+                      </h3>
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E50914] text-white shadow">
+                        {item.episodeCount ? `${item.episodeCount} AVSNITT` : item.type === 'series' ? 'NY SERIE' : 'NY FILM'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // --- HUVUDAPPLIKATION ---
+    function App() {
+      const [user, setUser] = useState(null);
+      const [isSignUp, setIsSignUp] = useState(false);
+      const [authModal, setAuthModal] = useState(true);
+
+      const emailInputRef = useRef(null);
+      const passwordInputRef = useRef(null);
+
+      // Mediedata
+      const [channels, setChannels] = useState(INITIAL_CHANNELS);
+      const [movies, setMovies] = useState([]);
+      const [series, setSeries] = useState([]);
+      const [favLists, setFavLists] = useState(DEFAULT_FAV_LISTS);
+
+      // Historik & Fortsätt titta
+      const [watchHistory, setWatchHistory] = useState([]); // Array med senaste items
+      const [watchProgress, setWatchProgress] = useState({}); // { [itemId]: { time, duration, updated } }
+
+      // EPG
+      const [epgData, setEpgData] = useState({});
+      const [epgUrl, setEpgUrl] = useState('');
+      const [epgStatus, setEpgStatus] = useState('');
+      const [epgSearch, setEpgSearch] = useState('');
+
+      // Navigering: 'home' (För dig), 'movies' (Film), 'series' (Serie), 'live' (Live), 'epg' (TV-guide), 'settings' (Inställningar)
+      const [activeTab, setActiveTab] = useState('home');
+      const [currentMedia, setCurrentMedia] = useState(null);
+      const [isFullscreenPlayer, setIsFullscreenPlayer] = useState(false);
+
+      // Filter / Kategori-expansion / Sök
+      const [expandedCategory, setExpandedCategory] = useState(null); // { title, items }
+      const [selectedLiveGroup, setSelectedLiveGroup] = useState('ALL');
+      const [searchModal, setSearchModal] = useState(false);
+      const [globalSearch, setGlobalSearch] = useState('');
+      const [renderLimit, setRenderLimit] = useState(80);
+
+      // Detalj-modal för Film / Serie (med Säsong & Avsnittsväljare)
+      const [detailItem, setDetailItem] = useState(null);
+      const [selectedSeason, setSelectedSeason] = useState(1);
+
+      // Spelarinställningar & Tema
+      const [playerEngine, setPlayerEngine] = useState('auto');
+      const [tvMode, setTvMode] = useState(false);
+      const [accentTheme, setAccentTheme] = useState('crimson'); // 'crimson' (IPTVX/Netflix) eller 'gold' (Royal)
+      const [copyFeedback, setCopyFeedback] = useState(false);
+      const [quickDrawer, setQuickDrawer] = useState(false);
+
+      // Favorit-modaler
+      const [favModalItem, setFavModalItem] = useState(null);
+      const [manageFavModal, setManageFavModal] = useState(false);
+      const [newListName, setNewListName] = useState('');
+      const [newListGroup, setNewListGroup] = useState('ALL');
+      const [newListFilter, setNewListFilter] = useState('');
+
+      // Källor & Status
+      const [savedM3uUrl, setSavedM3uUrl] = useState('');
+      const [m3uUrl, setM3uUrl] = useState('');
+      const [statusMsg, setStatusMsg] = useState('');
+      const [settingsSubView, setSettingsSubView] = useState(null); // 'sources', 'player', 'appearance', 'cloud'
+
+      // Videoreferenser
+      const videoRef = useRef(null);
+      const [videoError, setVideoError] = useState(null);
+      const retryCountRef = useRef(0);
+
+      const accentColor = accentTheme === 'crimson' ? '#E50914' : '#D4A346';
+
+      // --- AUTENTISERING & DATA-LADDNING ---
+      useEffect(() => {
+        if (!supabaseClient) return;
+        supabaseClient.auth.getUser().then(({ data }) => {
+          if (data?.user) {
+            setUser(data.user);
+            setAuthModal(false);
+            loadUserData(data.user.id);
+          } else {
+            setAuthModal(true);
+          }
+        });
+
+        const { data: authListener } = supabaseClient.auth.onAuthStateChange((event, session) => {
+          if (session?.user) {
+            setUser(session.user);
+            setAuthModal(false);
+            loadUserData(session.user.id);
+          } else {
+            setUser(null);
+            setChannels(INITIAL_CHANNELS);
+            setMovies([]);
+            setSeries([]);
+            setAuthModal(true);
+          }
+        });
+
+        return () => {
+          authListener?.subscription?.unsubscribe();
+        };
+      }, []);
+
+      async function loadUserData(userId) {
+        // 1. Ladda lokal cache (IndexedDB)
+        const cachedMedia = await loadLocalCache(`media_${userId}`);
+        if (cachedMedia) {
+          if (cachedMedia.channels?.length) setChannels(cachedMedia.channels);
+          if (cachedMedia.movies) setMovies(cachedMedia.movies);
+          if (cachedMedia.series) setSeries(cachedMedia.series);
+          if (cachedMedia.m3uUrl) {
+            setSavedM3uUrl(cachedMedia.m3uUrl);
+            setM3uUrl(cachedMedia.m3uUrl);
+          }
+          if (cachedMedia.epgUrl) setEpgUrl(cachedMedia.epgUrl);
+          setStatusMsg(`Spellista redo: ${cachedMedia.channels?.length || 0} kanaler, ${cachedMedia.movies?.length || 0} filmer, ${cachedMedia.series?.length || 0} serieavsnitt.`);
+        }
+
+        const cachedEpg = await loadLocalCache(`epg_${userId}`);
+        if (cachedEpg) setEpgData(cachedEpg);
+
+        const cachedHistory = await loadLocalCache(`history_${userId}`);
+        if (cachedHistory) {
+          if (cachedHistory.watchHistory) setWatchHistory(cachedHistory.watchHistory);
+          if (cachedHistory.watchProgress) setWatchProgress(cachedHistory.watchProgress);
+        }
+
+        // 2. Ladda Smarta Mappar från Supabase
+        if (!supabaseClient) return;
+        try {
+          const { data, error } = await supabaseClient
+            .from('user_settings')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (!error && data && data.fav_lists) {
+            setFavLists(data.fav_lists);
+          }
+        } catch (err) {
+          console.error('Molnfel:', err);
+        }
+      }
+
+      async function saveToCloud(lists) {
+        if (!supabaseClient || !user) return;
+        try {
+          await supabaseClient.from('user_settings').upsert({
+            user_id: user.id,
+            fav_lists: lists,
+            updated_at: new Date()
+          }, { onConflict: 'user_id' });
+        } catch (err) {
+          console.error('Kunde ej synka till molnet:', err);
+        }
+      }
+
+      // Registrera uppspelning i "Fortsätt titta" / "Senast sedda"
+      const startPlayback = (item, openFull = true) => {
+        if (!item) return;
+        setCurrentMedia(item);
+        if (openFull) setIsFullscreenPlayer(true);
+        setDetailItem(null);
+
+        setWatchHistory((prev) => {
+          const filtered = prev.filter((x) => x.id !== item.id);
+          const updated = [item, ...filtered].slice(0, 25);
+          if (user) {
+            saveLocalCache(`history_${user.id}`, { watchHistory: updated, watchProgress });
+          }
+          return updated;
+        });
+      };
+
+      // Spara tidsposition under film/serie-uppspelning
+      const handleTimeUpdate = () => {
+        const video = videoRef.current;
+        if (!video || !currentMedia || currentMedia.type === 'live') return;
+        if (video.currentTime > 5 && video.duration > 30) {
+          setWatchProgress((prev) => {
+            const next = {
+              ...prev,
+              [currentMedia.id]: {
+                time: Math.floor(video.currentTime),
+                duration: Math.floor(video.duration),
+                updated: Date.now()
+              }
+            };
+            if (user && Math.floor(video.currentTime) % 10 === 0) {
+              saveLocalCache(`history_${user.id}`, { watchHistory, watchProgress: next });
+            }
+            return next;
+          });
+        }
+      };
+
+      // --- VIDEOSPELARMOTOR MED AUTO-RECONNECT ---
+      useEffect(() => {
+        const video = videoRef.current;
+        const mediaUrl = currentMedia?.url;
+        if (!video || !mediaUrl || !user) return;
+
+        setVideoError(null);
+        retryCountRef.current = 0;
+        let hls = null;
+        let mpegtsPlayer = null;
+
+        const cleanUp = () => {
+          if (hls) { hls.destroy(); hls = null; }
+          if (mpegtsPlayer) {
+            try {
+              mpegtsPlayer.pause();
+              mpegtsPlayer.unload();
+              mpegtsPlayer.detachMediaElement();
+              mpegtsPlayer.destroy();
+            } catch (e) {}
+            mpegtsPlayer = null;
+          }
+          video.removeAttribute('src');
+          video.load();
+        };
+
+        cleanUp();
+
+        const lowerUrl = mediaUrl.toLowerCase();
+        const isM3U8 = lowerUrl.includes('.m3u8');
+        const isDirectFile = /\.(mp4|mkv|avi|mov|webm)$/i.test(lowerUrl);
+        const isLikelyTS = lowerUrl.endsWith('.ts') || (!isM3U8 && !isDirectFile);
+
+        const applySavedTime = () => {
+          const saved = watchProgress[currentMedia.id];
+          if (saved && saved.time > 10 && currentMedia.type !== 'live') {
+            video.currentTime = saved.time;
+          }
+        };
+
+        const startMpegTs = () => {
+          if (window.mpegts && window.mpegts.isSupported()) {
+            try {
+              mpegtsPlayer = window.mpegts.createPlayer({
+                type: 'mpegts',
+                isLive: currentMedia.type === 'live',
+                url: mediaUrl,
+                cors: true
+              }, { enableWorker: true, lazyLoadMaxDuration: 3 * 60, seekType: 'range' });
+              mpegtsPlayer.attachMediaElement(video);
+              mpegtsPlayer.load();
+              mpegtsPlayer.play().catch(() => {});
+              mpegtsPlayer.on(window.mpegts.Events.ERROR, () => {
+                if (retryCountRef.current < 1) {
+                  retryCountRef.current += 1;
+                  setTimeout(() => {
+                    try { mpegtsPlayer.unload(); mpegtsPlayer.load(); mpegtsPlayer.play().catch(() => {}); } catch (e) {}
+                  }, 1200);
+                } else {
+                  setVideoError('Det är ett problem med streamingen av denna kanal (CORS eller offline). Öppna i VLC eller byt motor nedan.');
+                }
+              });
+            } catch (err) {
+              setVideoError('Det är ett problem med streamingen av denna kanal.');
+            }
+          } else {
+            setVideoError('MPEG-TS stöds ej på denna enhet. Öppna i VLC.');
+          }
+        };
+
+        const startHls = (allowFallbackToTs = false) => {
+          if (window.Hls && window.Hls.isSupported()) {
+            hls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
+            hls.loadSource(mediaUrl);
+            hls.attachMedia(video);
+            hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+              applySavedTime();
+              video.play().catch(() => {});
+            });
+            hls.on(window.Hls.Events.ERROR, (event, data) => {
+              if (data.fatal) {
+                if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 2) {
+                  retryCountRef.current += 1;
+                  hls.startLoad();
+                } else {
+                  hls.destroy();
+                  hls = null;
+                  if (allowFallbackToTs) startMpegTs();
+                  else setVideoError('Det är ett problem med streamingen av denna kanal.');
+                }
+              }
+            });
+          } else {
+            video.src = mediaUrl;
+            video.addEventListener('loadedmetadata', applySavedTime, { once: true });
+            video.play().catch(() => {
+              setVideoError('Det är ett problem med streamingen av denna kanal.');
+            });
+          }
+        };
+
+        if (playerEngine === 'mpegts') startMpegTs();
+        else if (playerEngine === 'hls') startHls(false);
+        else if (playerEngine === 'native') {
+          video.src = mediaUrl;
+          video.addEventListener('loadedmetadata', applySavedTime, { once: true });
+          video.play().catch(() => {});
+        } else {
+          if (isDirectFile) {
+            video.src = mediaUrl;
+            video.addEventListener('loadedmetadata', applySavedTime, { once: true });
+            video.play().catch(() => {});
+          } else if (isM3U8) startHls(true);
+          else if (isLikelyTS) startMpegTs();
+          else startHls(true);
+        }
+
+        return cleanUp;
+      }, [currentMedia, user, playerEngine]);
+
+      // --- EPG MATCHNING ---
+      const getChannelEpg = (ch) => {
+        if (!ch || Object.keys(epgData).length === 0) return null;
+        const cleanName = ch.name.toLowerCase().replace(/\s+(hd|fhd|uhd|4k|se|uk|us|\[\-?\d+h\])$/gi, '').trim();
+        const progList = epgData[ch.tvgId] || epgData[ch.name.toLowerCase()] || epgData[cleanName];
+        if (!progList || progList.length === 0) return null;
+
+        const now = new Date();
+        let currentProg = null;
+        let nextProg = null;
+
+        for (let i = 0; i < progList.length; i++) {
+          const p = progList[i];
+          const start = p.start instanceof Date ? p.start : new Date(p.start);
+          const stop = p.stop instanceof Date ? p.stop : new Date(p.stop);
+          if (start <= now && stop >= now) {
+            currentProg = { ...p, start, stop };
+            nextProg = progList[i + 1] ? { ...progList[i + 1], start: new Date(progList[i + 1].start), stop: new Date(progList[i + 1].stop) } : null;
+            break;
+          } else if (start > now) {
+            nextProg = { ...p, start, stop };
+            break;
+          }
+        }
+
+        let progress = 0;
+        if (currentProg && currentProg.start && currentProg.stop) {
+          const total = currentProg.stop - currentProg.start;
+          const elapsed = now - currentProg.start;
+          if (total > 0) progress = Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
+        }
+
+        return { currentProg, nextProg, progress };
+      };
+
+      // --- GRUPPERING AV SERIER (SÄSONG & AVSNITT) ---
+      const groupedSeriesCatalog = useMemo(() => {
+        const showMap = {};
+        const shows = [];
+        series.forEach((ep) => {
+          const showKey = (ep.seriesTitle || ep.name).toLowerCase().trim();
+          if (!showMap[showKey]) {
+            const showObj = {
+              ...ep,
+              id: 'show_' + showKey.replace(/[^a-z0-9]/g, ''),
+              name: ep.seriesTitle || ep.name,
+              isSeriesShow: true,
+              episodes: [],
+              episodeCount: 0
+            };
+            showMap[showKey] = showObj;
+            shows.push(showObj);
+          }
+          showMap[showKey].episodes.push(ep);
+          showMap[showKey].episodeCount += 1;
+        });
+        return shows;
+      }, [series]);
+
+      // --- SMARTA MAPPAR & FAVORITER ---
+      const allAvailableGroups = useMemo(() => {
+        const set = new Set();
+        [...channels, ...movies, ...series].forEach((item) => {
+          if (item.group) set.add(item.group);
+        });
+        return Array.from(set);
+      }, [channels, movies, series]);
+
+      const favItemsById = useMemo(() => {
+        const allItems = [...channels, ...movies, ...series];
+        const map = {};
+        favLists.forEach((favList) => {
+          const manualSet = new Set(favList.channelIds || []);
+          const hasFilter = (favList.filter && favList.filter.trim() !== '') || (favList.filterGroup && favList.filterGroup !== 'ALL');
+          const fg = (favList.filterGroup || '').toLowerCase();
+          const term = (favList.filter || '').toLowerCase().trim();
+
+          map[favList.id] = allItems.filter((item) => {
+            if (manualSet.has(item.id)) return true;
+            if (!hasFilter) return false;
+
+            const itemGrp = (item.group || '').toLowerCase();
+            const groupMatches = !fg || fg === 'all' || itemGrp === fg || itemGrp.includes(fg);
+            const termMatches = !term || item.name.toLowerCase().includes(term);
+
+            return groupMatches && termMatches;
+          });
+        });
+        return map;
+      }, [favLists, channels, movies, series]);
+
+      const allFavoritedIds = useMemo(() => {
+        const set = new Set();
+        favLists.forEach((l) => (l.channelIds || []).forEach((id) => set.add(id)));
+        return set;
+      }, [favLists]);
+
+      const allFavoriteItemsCombined = useMemo(() => {
+        const seen = new Set();
+        const result = [];
+        Object.values(favItemsById).forEach((arr) => {
+          arr.forEach((it) => {
+            if (!seen.has(it.id)) {
+              seen.add(it.id);
+              result.push(it);
+            }
+          });
+        });
+        return result;
+      }, [favItemsById]);
+
+      // --- GRUPPERADE RADER FÖR FILM, SERIE & LIVE ---
+      const movieGroups = useMemo(() => {
+        const map = {};
+        movies.forEach((m) => {
+          const g = m.group || 'VOD: Filmer';
+          if (!map[g]) map[g] = [];
+          map[g].push(m);
+        });
+        return Object.entries(map);
+      }, [movies]);
+
+      const seriesGroups = useMemo(() => {
+        const map = {};
+        groupedSeriesCatalog.forEach((s) => {
+          const g = s.group || 'Series';
+          if (!map[g]) map[g] = [];
+          map[g].push(s);
+        });
+        return Object.entries(map);
+      }, [groupedSeriesCatalog]);
+
+      const liveGroups = useMemo(() => {
+        const map = {};
+        channels.forEach((c) => {
+          const g = c.group || 'Övriga kanaler';
+          if (!map[g]) map[g] = [];
+          map[g].push(c);
+        });
+        return map;
+      }, [channels]);
+
+      // --- HERO FEATURED ITEM (FÖR DIG / FILM / SERIE) ---
+      const heroItem = useMemo(() => {
+        if (activeTab === 'movies' && movies.length > 0) return movies[0];
+        if (activeTab === 'series' && groupedSeriesCatalog.length > 0) return groupedSeriesCatalog[0];
+        if (movies.length > 0) return movies[Math.min(2, movies.length - 1)];
+        if (groupedSeriesCatalog.length > 0) return groupedSeriesCatalog[0];
+        return channels[0] || INITIAL_CHANNELS[0];
+      }, [activeTab, movies, groupedSeriesCatalog, channels]);
+
+      // --- SÖKRESULTAT ---
+      const searchResults = useMemo(() => {
+        if (!globalSearch.trim()) return [];
+        const q = globalSearch.toLowerCase().trim();
+        const all = [...channels, ...movies, ...groupedSeriesCatalog];
+        return all.filter((item) => item.name.toLowerCase().includes(q) || (item.group && item.group.toLowerCase().includes(q))).slice(0, 120);
+      }, [globalSearch, channels, movies, groupedSeriesCatalog]);
+
+      // --- HANDLERS ---
+      const handleCardSelect = (item) => {
+        if (item.isSeriesShow && item.episodes?.length > 0) {
+          setDetailItem(item);
+          const firstSeason = item.episodes[0]?.season || 1;
+          setSelectedSeason(firstSeason);
+          return;
+        }
+        startPlayback(item, true);
+      };
+
+      const toggleChannelInFavList = (listId, itemId) => {
+        setFavLists((prev) => {
+          const updated = prev.map((list) => {
+            if (list.id !== listId) return list;
+            const currentIds = list.channelIds || [];
+            const exists = currentIds.includes(itemId);
+            return {
+              ...list,
+              channelIds: exists ? currentIds.filter((id) => id !== itemId) : [...currentIds, itemId]
+            };
+          });
+          saveToCloud(updated);
+          return updated;
+        });
+      };
+
+      const handleCreateFavList = (e) => {
+        e.preventDefault();
+        if (!newListName.trim()) return;
+        const newList = { 
+          id: 'fav_' + Date.now(), 
+          name: newListName.trim(), 
+          filterGroup: newListGroup,
+          filter: newListFilter.trim(),
+          channelIds: favModalItem ? [favModalItem.id] : [] 
+        };
+        const updated = [...favLists, newList];
+        setFavLists(updated);
+        saveToCloud(updated);
+        setNewListName('');
+        setNewListFilter('');
+        setNewListGroup('ALL');
+      };
+
+      const handleDeleteFavList = (id) => {
+        const updated = favLists.filter((l) => l.id !== id);
+        setFavLists(updated);
+        saveToCloud(updated);
+      };
+
+      const handleAuth = async (e) => {
+        e.preventDefault();
+        if (!supabaseClient) return;
+        const emailVal = emailInputRef.current?.value?.trim() || '';
+        const passVal = passwordInputRef.current?.value || '';
+        if (!emailVal || !passVal) return alert('Fyll i både e-post och lösenord.');
+
+        try { localStorage.setItem('mk_saved_email', emailVal); } catch (err) {}
+
+        if (isSignUp) {
+          const { error } = await supabaseClient.auth.signUp({ email: emailVal, password: passVal });
+          if (error) alert(error.message);
+          else alert('Konto skapat! Du kan nu logga in.');
+        } else {
+          const { error } = await supabaseClient.auth.signInWithPassword({ email: emailVal, password: passVal });
+          if (error) alert(error.message);
+          else setAuthModal(false);
+        }
+      };
+
+      const handleLogout = async () => {
+        if (!supabaseClient) return;
+        await supabaseClient.auth.signOut();
+        setUser(null);
+        setAuthModal(true);
+      };
+
+      const openInExternalPlayer = (scheme, item = currentMedia) => {
+        const url = item?.url;
+        if (!url) return;
+        if (scheme === 'vlc') window.location.href = `vlc://${url}`;
+        else if (scheme === 'potplayer') window.location.href = `potplayer://${url}`;
+        else if (scheme === 'iina') window.location.href = `iina://weblink?url=${encodeURIComponent(url)}`;
+      };
+
+      const downloadSingleM3U = (item = currentMedia) => {
+        if (!item?.url) return;
+        const m3uContent = `#EXTM3U\n#EXTINF:-1 tvg-logo="${item.logo || ''}" group-title="${item.group || ''}",${item.name}\n${item.url}`;
+        const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${item.name.replace(/[^a-z0-9]/gi, '_')}.m3u`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      const copyStreamUrl = (item = currentMedia) => {
+        if (!item?.url) return;
+        navigator.clipboard.writeText(item.url);
+        setCopyFeedback(true);
+        setTimeout(() => setCopyFeedback(false), 2000);
+      };
+
+      const loadEpgFromUrl = async (urlToLoad) => {
+        const target = (urlToLoad || epgUrl).trim();
+        if (!target) return;
+        setEpgStatus('Hämtar TV-tablå (EPG)...');
+        try {
+          let xmlText = '';
+          try {
+            const res = await fetch(target);
+            if (!res.ok) throw new Error();
+            xmlText = await res.text();
+          } catch (e) {
+            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(target);
+            const resP = await fetch(proxy);
+            xmlText = await resP.text();
+          }
+          const parsedEpg = parseXMLTV(xmlText);
+          const count = Object.keys(parsedEpg).length;
+          if (count > 0) {
+            setEpgData(parsedEpg);
+            if (user) await saveLocalCache(`epg_${user.id}`, parsedEpg);
+            setEpgStatus(`EPG klar! Laddade tablå för ${count} kanaler.`);
+          } else {
+            setEpgStatus('Inga program hittades i EPG-länken.');
+          }
+        } catch (err) {
+          setEpgStatus('Kunde ej hämta EPG via länk. Ladda upp XML-filen istället.');
+        }
+      };
+
+      const handleEpgFileUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setEpgStatus('Läser in XMLTV-fil...');
+        setTimeout(() => {
+          const reader = new FileReader();
+          reader.onload = async (ev) => {
+            const parsedEpg = parseXMLTV(ev.target.result);
+            const count = Object.keys(parsedEpg).length;
+            if (count > 0) {
+              setEpgData(parsedEpg);
+              if (user) await saveLocalCache(`epg_${user.id}`, parsedEpg);
+              setEpgStatus(`EPG klar! Tablå laddad för ${count} kanaler.`);
+            } else {
+              setEpgStatus('Inga program hittades.');
+            }
+          };
+          reader.readAsText(file);
+        }, 50);
+      };
+
+      const applyParsedData = async (parsed, sourceM3uUrl = '') => {
+        const newLive = parsed.live.length > 0 ? parsed.live : INITIAL_CHANNELS;
+        const newMovies = parsed.movies;
+        const newSeries = parsed.series;
+
+        setChannels(newLive);
+        setMovies(newMovies);
+        setSeries(newSeries);
+
+        if (user) {
+          await saveLocalCache(`media_${user.id}`, {
+            channels: newLive,
+            movies: newMovies,
+            series: newSeries,
+            m3uUrl: sourceM3uUrl || savedM3uUrl,
+            epgUrl: parsed.detectedEpgUrl || epgUrl
+          });
+        }
+
+        saveToCloud(favLists);
+        setStatusMsg(`Klar! Sparade ${newLive.length} kanaler, ${newMovies.length} filmer och ${newSeries.length} serieavsnitt.`);
+
+        if (parsed.detectedEpgUrl) {
+          setEpgUrl(parsed.detectedEpgUrl);
+          loadEpgFromUrl(parsed.detectedEpgUrl);
+        }
+      };
+
+      const handleFileUpload = (e) => {
+        if (!user) return;
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setStatusMsg('Läser in och optimerar M3U-fil...');
+        setTimeout(() => {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const parsed = parseM3U(ev.target.result);
+            applyParsedData(parsed);
+          };
+          reader.readAsText(file);
+        }, 50);
+      };
+
+      const handleLoadM3uUrl = async (e) => {
+        if (e) e.preventDefault();
+        if (!user) return;
+        const urlToFetch = m3uUrl.trim() || savedM3uUrl;
+        if (!urlToFetch) return;
+
+        setStatusMsg('Hämtar spellista...');
+        try {
+          let text = '';
+          try {
+            const res = await fetch(urlToFetch);
+            if (!res.ok) throw new Error();
+            text = await res.text();
+          } catch (directErr) {
+            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(urlToFetch);
+            const resProxy = await fetch(proxyUrl);
+            text = await resProxy.text();
+          }
+          const parsed = parseM3U(text);
+          setSavedM3uUrl(urlToFetch);
+          applyParsedData(parsed, urlToFetch);
+        } catch (err) {
+          setStatusMsg('CORS-spärr på länk. Ladda upp M3U-filen direkt istället!');
+        }
+      };
+
+      const handleClearCache = async () => {
+        if (!user) return;
+        await saveLocalCache(`media_${user.id}`, null);
+        await saveLocalCache(`epg_${user.id}`, null);
+        await saveLocalCache(`history_${user.id}`, null);
+        setChannels(INITIAL_CHANNELS);
+        setMovies([]);
+        setSeries([]);
+        setWatchHistory([]);
+        setWatchProgress({});
+        setEpgData({});
+        setStatusMsg('All lokal cache och historik har rensats.');
+      };
+
+      const openGenreFilter = (genreObj) => {
+        const allVod = [...movies, ...groupedSeriesCatalog];
+        const matches = allVod.filter((item) => {
+          const hay = `${item.name} ${item.group}`.toLowerCase();
+          return genreObj.keywords.some((kw) => hay.includes(kw));
+        });
+        setExpandedCategory({
+          title: `Genre: ${genreObj.label}`,
+          items: matches.length > 0 ? matches : allVod.slice(0, 60)
+        });
+      };
+
+      const openYearFilter = (yr) => {
+        const allVod = [...movies, ...groupedSeriesCatalog];
+        const matches = allVod.filter((item) => item.year === yr || item.name.includes(yr));
+        setExpandedCategory({
+          title: `Utforska år: ${yr}`,
+          items: matches
+        });
+      };
+
+      const savedEmailDefault = useMemo(() => {
+        try { return localStorage.getItem('mk_saved_email') || ''; } catch (e) { return ''; }
+      }, []);
+
+      const activeChannelEpg = useMemo(() => getChannelEpg(currentMedia), [currentMedia, epgData]);
+
+      return (
+        <div className={`w-full h-screen bg-black flex flex-col overflow-hidden text-white relative ${tvMode ? 'text-lg' : ''}`}>
+          
+          {/* TOPP-NAVIGERING (IPTVX / NETFLIX STIL) */}
+          <header className="h-16 sm:h-20 bg-gradient-to-b from-black/95 via-black/80 to-transparent px-4 sm:px-8 flex items-center justify-between shrink-0 z-30 border-b border-white/5">
+            <div className="flex items-center gap-5 sm:gap-8 min-w-0">
+              {/* Logotyp */}
+              <div
+                onClick={() => { setActiveTab('home'); setExpandedCategory(null); setIsFullscreenPlayer(false); }}
+                className="flex items-center gap-2.5 cursor-pointer shrink-0 group"
+              >
+                <div
+                  style={{ backgroundColor: accentColor }}
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-[0_0_25px_rgba(229,9,20,0.5)] group-hover:scale-105 transition"
+                >
+                  X
+                </div>
+                <div className="hidden sm:block">
+                  <span className="font-black tracking-wider text-base text-white block leading-none">MAGNERSKING</span>
+                  <span className="text-[9px] font-bold tracking-widest uppercase text-amber-400 block mt-0.5">ROYAL IPTVX</span>
+                </div>
+              </div>
+
+              {/* Huvudmeny (Flikar med röd understrykning som i IPTVX) */}
+              {user && (
+                <nav className="flex items-center gap-4 sm:gap-6 overflow-x-auto no-scrollbar py-2">
+                  {[
+                    { id: 'home', label: 'För dig' },
+                    { id: 'movies', label: 'Film', count: movies.length },
+                    { id: 'series', label: 'Serie', count: groupedSeriesCatalog.length },
+                    { id: 'live', label: 'Live', count: channels.length },
+                    { id: 'epg', label: 'TV-guide' },
+                    { id: 'settings', label: 'Inställningar' }
+                  ].map((tab) => {
+                    const isActive = activeTab === tab.id && !isFullscreenPlayer;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id);
+                          setExpandedCategory(null);
+                          setIsFullscreenPlayer(false);
+                          setSettingsSubView(null);
+                        }}
+                        className={`relative py-2 text-xs sm:text-sm font-bold whitespace-nowrap transition-colors ${
+                          isActive ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {isActive && (
+                          <span
+                            style={{ backgroundColor: accentColor }}
+                            className="absolute bottom-0 left-0 right-0 h-[3px] rounded-full shadow-[0_0_10px_#E50914]"
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+              )}
+            </div>
+
+            {/* Höger verktygsfält: Sök, Smarta Mappar & Profil-avatar */}
+            {user && (
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => setSearchModal(true)}
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-sm transition"
+                  title="Sök i hela katalogen"
+                >
+                  🔍
+                </button>
+
+                <button
+                  onClick={() => setManageFavModal(true)}
+                  className="hidden md:flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-white/15 px-3.5 py-2 rounded-full text-xs font-bold text-amber-400 transition"
+                >
+                  <span>★</span>
+                  <span>Smarta Mappar</span>
+                </button>
+
+                {/* Profil-avatar med dropdown-känsla (som i dina skärmdumpar) */}
+                <div
+                  onClick={() => { setActiveTab('settings'); setIsFullscreenPlayer(false); }}
+                  className="relative flex items-center gap-2 cursor-pointer group"
+                  title="Inställningar & Konto"
+                >
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-red-700 via-red-600 to-amber-500 p-0.5 shadow-lg">
+                    <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center font-black text-xs text-white">
+                      {user.email ? user.email.substring(0, 2).toUpperCase() : 'MK'}
+                    </div>
+                  </div>
+                  <span className="w-4 h-4 rounded-full bg-zinc-900 border border-white/20 flex items-center justify-center text-[9px] absolute -bottom-0.5 -right-0.5">
+                    ⌄
+                  </span>
+                </div>
+              </div>
+            )}
+          </header>
+
+          {/* HUVUDINNEHÅLL */}
+          {user ? (
+            <main className="flex-1 overflow-y-auto thin-scrollbar pb-28 relative z-10">
+              
+              {/* FULLSKÄRMS- / HUVUDSPELARVY */}
+              {isFullscreenPlayer && currentMedia && (
+                <div className="max-w-6xl mx-auto px-4 sm:px-8 py-4 space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      onClick={() => setIsFullscreenPlayer(false)}
+                      className="bg-zinc-900 hover:bg-zinc-800 border border-white/10 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition"
+                    >
+                      <span>←</span>
+                      <span>Fortsätt bläddra (Mini-player)</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-xl border border-white/10">
+                      {[
+                        { id: 'auto', label: 'Auto Smart' },
+                        { id: 'mpegts', label: 'MPEG-TS (.ts)' },
+                        { id: 'hls', label: 'HLS (.m3u8)' },
+                        { id: 'native', label: 'HTML5 Direkt' }
+                      ].map((eng) => (
+                        <button
+                          key={eng.id}
+                          onClick={() => setPlayerEngine(eng.id)}
+                          style={playerEngine === eng.id ? { backgroundColor: accentColor } : {}}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition ${
+                            playerEngine === eng.id ? 'text-white shadow' : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {eng.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Videospelare */}
+                  <div className="relative w-full aspect-video bg-black rounded-2xl border border-white/15 shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden">
+                    <video
+                      ref={videoRef}
+                      controls
+                      playsInline
+                      autoPlay
+                      onTimeUpdate={handleTimeUpdate}
+                      className="w-full h-full object-contain bg-black"
+                    />
+                    {videoError && (
+                      <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center space-y-4">
+                        <span className="bg-[#E50914] text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-white live-dot" />
+                          LIVE / STREAM
+                        </span>
+                        <p className="text-white font-bold text-base sm:text-lg max-w-md">
+                          Det är ett problem med streamingen av denna kanal
+                        </p>
+                        <p className="text-xs text-zinc-400 max-w-md">{videoError}</p>
+                        <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                          <button
+                            onClick={() => openInExternalPlayer('vlc')}
+                            className="bg-[#FF6B00] hover:bg-[#e55f00] text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-lg transition"
+                          >
+                            🟠 Spela i VLC
+                          </button>
+                          <button
+                            onClick={() => openInExternalPlayer('potplayer')}
+                            className="bg-[#2B5B84] hover:bg-[#346C9C] text-white font-extrabold px-4 py-2.5 rounded-xl text-xs shadow-lg transition"
+                          >
+                            🔵 PotPlayer
+                          </button>
+                          <button
+                            onClick={() => downloadSingleM3U()}
+                            className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs border border-white/10 transition"
+                          >
+                            📥 Ladda ner .m3u
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Kanal- / Film-metadata under spelaren */}
+                  <div className="bg-[#111215] border border-white/10 rounded-2xl p-5 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span style={{ backgroundColor: accentColor }} className="text-[10px] font-black uppercase px-2 py-0.5 rounded text-white">
+                            {currentMedia.type === 'live' ? 'LIVE' : currentMedia.type === 'series' ? 'SERIE' : 'VOD FILM'}
+                          </span>
+                          {currentMedia.quality && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-white/20 text-zinc-300">
+                              {currentMedia.quality}
+                            </span>
+                          )}
+                          <span className="text-xs text-zinc-400 truncate">{currentMedia.group}</span>
+                        </div>
+                        <h1 className="text-lg sm:text-2xl font-black text-white truncate">{currentMedia.name}</h1>
+                        {activeChannelEpg?.currentProg ? (
+                          <div className="pt-1 space-y-1">
+                            <p className="text-xs sm:text-sm text-amber-400 font-bold">
+                              Nu: {activeChannelEpg.currentProg.title}{' '}
+                              <span className="text-zinc-400 font-normal">
+                                ({formatTime(activeChannelEpg.currentProg.start)} - {formatTime(activeChannelEpg.currentProg.stop)})
+                              </span>
+                            </p>
+                            <div className="w-full max-w-md bg-white/10 h-1.5 rounded-full overflow-hidden">
+                              <div style={{ backgroundColor: accentColor }} className="h-full rounded-full" style={{ width: `${activeChannelEpg.progress}%`, backgroundColor: accentColor }} />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-500">
+                            {currentMedia.type === 'live' ? 'TV-guiden innehåller ingen information om programmet som visas just nu.' : `År: ${currentMedia.year || '2025'} • ★ ${currentMedia.rating || '8,1'}`}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setFavModalItem(currentMedia)}
+                          className="bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-white/10 px-4 py-2.5 rounded-xl text-xs font-extrabold transition"
+                        >
+                          ★ Favoritmapp
+                        </button>
+                        <button
+                          onClick={() => openInExternalPlayer('vlc')}
+                          className="bg-[#FF6B00] hover:brightness-110 text-white px-4 py-2.5 rounded-xl text-xs font-extrabold transition"
+                        >
+                          🟠 VLC
+                        </button>
+                        <button
+                          onClick={() => copyStreamUrl()}
+                          className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold border border-white/10 transition"
+                        >
+                          {copyFeedback ? '✓ Kopierad!' : '🔗 Kopiera länk'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* EXPANDERAD KATEGORI-VY (NÄR MAN KLICKAR PÅ "EXPANDERA" ELLER EN GENRE/ÅR) */}
+              {!isFullscreenPlayer && expandedCategory && (
+                <div className="px-4 sm:px-8 py-6 space-y-6">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                    <div>
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#E50914]">KATALOGVY</span>
+                      <h1 className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                        {expandedCategory.title} ({expandedCategory.items.length})
+                      </h1>
+                    </div>
+                    <button
+                      onClick={() => { setExpandedCategory(null); setRenderLimit(80); }}
+                      className="bg-zinc-900 hover:bg-zinc-800 border border-white/15 px-4 py-2 rounded-xl text-xs font-bold transition"
+                    >
+                      ← Tillbaka
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
+                    {expandedCategory.items.slice(0, renderLimit).map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => handleCardSelect(item)}
+                        className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#E50914] cursor-pointer transition hover:scale-[1.03] flex flex-col justify-end"
+                      >
+                        {item.logo ? (
+                          <img src={item.logo} alt={item.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-3xl opacity-20">🎬</div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                        <div className="relative z-10 p-3 space-y-1 text-center">
+                          <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-[#E50914] text-white inline-block">
+                            {item.type === 'live' ? 'LIVE' : item.type === 'series' ? 'SERIE' : 'SPELA'}
+                          </span>
+                          <h3 className="font-bold text-xs text-white line-clamp-2">{item.name}</h3>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {expandedCategory.items.length > renderLimit && (
+                    <button
+                      onClick={() => setRenderLimit((prev) => prev + 100)}
+                      className="w-full py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-extrabold text-white transition"
+                    >
+                      Visa fler ({expandedCategory.items.length - renderLimit} kvar)...
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* 1. FLIK: "FÖR DIG", "FILM" ELLER "SERIE" (NETFLIX / IPTVX STARTSIDA) */}
+              {!isFullscreenPlayer && !expandedCategory && (activeTab === 'home' || activeTab === 'movies' || activeTab === 'series') && (
+                <div className="space-y-8 pb-10">
+                  
+                  {/* STOR HERO-BANNER HÖGST UPP (SOM "AUTUMN AT APPLE HILL" / "WILD ARABIA") */}
+                  {heroItem && (
+                    <div className="relative w-full h-[360px] sm:h-[440px] flex flex-col justify-end overflow-hidden border-b border-white/5">
+                      {heroItem.logo ? (
+                        <img
+                          src={heroItem.logo}
+                          alt={heroItem.name}
+                          className="absolute inset-0 w-full h-full object-cover object-center scale-105 blur-[1px] opacity-65"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-br from-red-950/60 via-zinc-900 to-black" />
+                      )}
+                      <div className="absolute inset-0 hero-vignette" />
+
+                      <div className="relative z-10 max-w-3xl mx-auto w-full px-6 pb-8 text-center space-y-4">
+                        <h1 className="text-2xl sm:text-5xl font-black tracking-tight text-white drop-shadow-[0_6px_25px_rgba(0,0,0,0.9)] line-clamp-2">
+                          {heroItem.seriesTitle || heroItem.name}
+                        </h1>
+
+                        <div className="flex items-center justify-center gap-3 text-xs sm:text-sm font-semibold text-zinc-300">
+                          <span>{heroItem.type === 'series' ? 'TV-Serie' : heroItem.type === 'movies' ? ' Bio-Film' : 'Live TV'}</span>
+                          <span>•</span>
+                          <span>{heroItem.year || '2025'}</span>
+                          {heroItem.quality && (
+                            <>
+                              <span>•</span>
+                              <span className="px-1.5 py-0.5 rounded bg-white/15 text-white text-[11px] font-bold">{heroItem.quality}</span>
+                            </>
+                          )}
+                          <span>•</span>
+                          <span className="text-amber-400 font-bold">★ {heroItem.rating || '8,2'}</span>
+                        </div>
+
+                        {/* Tre runda/ovala knappar som i IPTVX: Stjärna, Vit "Spela upp", Info */}
+                        <div className="flex items-center justify-center gap-5 pt-2">
+                          <button
+                            onClick={() => setFavModalItem(heroItem)}
+                            className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-lg text-white transition"
+                            title="Lägg till i favoriter"
+                          >
+                            ☆
+                          </button>
+
+                          <button
+                            onClick={() => handleCardSelect(heroItem)}
+                            className="bg-white hover:bg-zinc-200 text-black font-extrabold px-8 py-3.5 rounded-full text-sm flex items-center gap-2.5 shadow-[0_10px_30px_rgba(255,255,255,0.25)] hover:scale-105 transition"
+                          >
+                            <span>▶</span>
+                            <span>Spela upp</span>
+                          </button>
+
+                          <button
+                            onClick={() => setDetailItem(heroItem)}
+                            className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-sm font-bold text-white transition"
+                            title="Mer info"
+                          >
+                            ⓘ
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Om användaren inte har laddat in någon spellista ännu */}
+                  {channels.length <= 2 && movies.length === 0 && series.length === 0 && (
+                    <div className="mx-4 sm:mx-8 p-6 rounded-2xl bg-gradient-to-r from-red-950/50 via-zinc-900 to-zinc-950 border border-red-500/30 flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">KOM IGÅNG DIREKT</span>
+                        <h3 className="text-base sm:text-lg font-extrabold text-white">Ladda in din M3U-spellista & EPG</h3>
+                        <p className="text-xs text-zinc-400">Din spellista sparas lokalt i appens höghastighets-cache så att du aldrig behöver ladda om den.</p>
+                      </div>
+                      <button
+                        onClick={() => { setActiveTab('settings'); setSettingsSubView('sources'); }}
+                        style={{ backgroundColor: accentColor }}
+                        className="px-5 py-3 rounded-xl text-xs font-extrabold text-white shadow-lg hover:brightness-110 transition"
+                      >
+                        + Spellista Hantering
+                      </button>
+                    </div>
+                  )}
+
+                  {/* RAD 1: FORTSÄTT ATT TITTA */}
+                  {watchHistory.length > 0 && (
+                    <MediaCarouselRow
+                      title="Fortsätt att titta"
+                      items={watchHistory}
+                      type="landscape"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                      watchProgressMap={watchProgress}
+                      onExpand={() => setExpandedCategory({ title: 'Fortsätt att titta', items: watchHistory })}
+                    />
+                  )}
+
+                  {/* RAD 2: DINA SMARTA MAPPAR & FAVORITER */}
+                  {allFavoriteItemsCombined.length > 0 && (
+                    <MediaCarouselRow
+                      title="Favoriter"
+                      items={allFavoriteItemsCombined}
+                      type="poster"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                      onExpand={() => setExpandedCategory({ title: 'Favoriter', items: allFavoriteItemsCombined })}
+                    />
+                  )}
+
+                  {/* RAD 3: SENAST SEDDA LIVE-KANALER (IPTVX KORT) */}
+                  {activeTab === 'home' && channels.length > 0 && (
+                    <MediaCarouselRow
+                      title="Senast sedda & Populära Kanaler"
+                      items={watchHistory.filter((x) => x.type === 'live').concat(channels).slice(0, 20)}
+                      type="live-card"
+                      onSelect={handleCardSelect}
+                      getChannelEpg={getChannelEpg}
+                      onExpand={() => setActiveTab('live')}
+                    />
+                  )}
+
+                  {/* RAD 4: TRENDIG DENNA VECKA (MED STORA SIFFROR 1, 2, 3...) */}
+                  {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (
+                    <MediaCarouselRow
+                      title="Trendig denna vecka"
+                      items={movies.slice(0, 10)}
+                      type="rank"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                    />
+                  )}
+
+                  {activeTab === 'series' && groupedSeriesCatalog.length > 0 && (
+                    <MediaCarouselRow
+                      title="Trendiga serier denna vecka"
+                      items={groupedSeriesCatalog.slice(0, 10)}
+                      type="rank"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                    />
+                  )}
+
+                  {/* RAD 5: NYLIGEN TILLAGDA */}
+                  {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (
+                    <MediaCarouselRow
+                      title="Nyligen tillagda filmer"
+                      items={movies.slice(-30).reverse()}
+                      type="poster"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda filmer', items: movies.slice().reverse() })}
+                    />
+                  )}
+
+                  {(activeTab === 'home' || activeTab === 'series') && groupedSeriesCatalog.length > 0 && (
+                    <MediaCarouselRow
+                      title="Nyligen tillagda serier"
+                      items={groupedSeriesCatalog.slice(-30).reverse()}
+                      type="poster"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda serier', items: groupedSeriesCatalog })}
+                    />
+                  )}
+
+                  {/* RAD 6: UTFORSKA EFTER GENRE (SOM I DINA SKÄRMDUMPAR) */}
+                  <section className="space-y-2.5 px-4 sm:px-8">
+                    <h2 className="text-base sm:text-lg font-extrabold text-white">Utforska efter genre</h2>
+                    <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar py-1">
+                      {GENRE_CARDS.map((g) => (
+                        <div
+                          key={g.id}
+                          onClick={() => openGenreFilter(g)}
+                          className={`shrink-0 w-52 sm:w-60 h-28 sm:h-32 rounded-2xl bg-gradient-to-br ${g.gradient} border border-white/15 hover:border-white cursor-pointer p-4 flex flex-col justify-between relative overflow-hidden group transition hover:scale-[1.03] shadow-lg`}
+                        >
+                          <span className="text-3xl opacity-80 group-hover:scale-125 transition">{g.icon}</span>
+                          <span className="text-base sm:text-lg font-black tracking-wide text-white drop-shadow">{g.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* RAD 7: UTFORSKA EFTER ÅR (2026, 2025, 2024...) */}
+                  <section className="space-y-2.5 px-4 sm:px-8">
+                    <h2 className="text-base sm:text-lg font-extrabold text-white">Utforska efter år</h2>
+                    <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar py-1">
+                      {YEAR_CARDS.map((yr) => (
+                        <div
+                          key={yr}
+                          onClick={() => openYearFilter(yr)}
+                          className="shrink-0 w-48 sm:w-56 h-24 sm:h-28 rounded-2xl bg-gradient-to-tr from-zinc-950 via-zinc-900 to-blue-950/70 border border-white/15 hover:border-[#E50914] cursor-pointer flex items-center justify-center relative overflow-hidden group transition hover:scale-[1.03] shadow-lg"
+                        >
+                          <span className="text-3xl sm:text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-500 group-hover:scale-110 transition">
+                            {yr}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* DYNAMISKA VOD- & SERIE-KATEGORIER FRÅN LEVERANTÖREN */}
+                  {(activeTab === 'home' || activeTab === 'movies') &&
+                    movieGroups.slice(0, activeTab === 'movies' ? 25 : 8).map(([grpName, grpItems]) => (
+                      <MediaCarouselRow
+                        key={'mov_' + grpName}
+                        title={grpName}
+                        items={grpItems}
+                        type="poster"
+                        onSelect={handleCardSelect}
+                        onFavClick={setFavModalItem}
+                        favItemIds={allFavoritedIds}
+                        onExpand={() => setExpandedCategory({ title: grpName, items: grpItems })}
+                      />
+                    ))}
+
+                  {(activeTab === 'home' || activeTab === 'series') &&
+                    seriesGroups.slice(0, activeTab === 'series' ? 25 : 8).map(([grpName, grpItems]) => (
+                      <MediaCarouselRow
+                        key={'ser_' + grpName}
+                        title={grpName}
+                        items={grpItems}
+                        type="poster"
+                        onSelect={handleCardSelect}
+                        onFavClick={setFavModalItem}
+                        favItemIds={allFavoritedIds}
+                        onExpand={() => setExpandedCategory({ title: grpName, items: grpItems })}
+                      />
+                    ))}
+                </div>
+              )}
+
+              {/* 2. FLIK: LIVE TV (MED SMARTA MAPPAR & KATEGORIER) */}
+              {!isFullscreenPlayer && !expandedCategory && activeTab === 'live' && (
+                <div className="px-4 sm:px-8 py-5 space-y-6">
+                  {/* Horisontell mappväljare */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h1 className="text-xl sm:text-2xl font-black text-white">Live TV ({channels.length} kanaler)</h1>
+                      <button
+                        onClick={() => setManageFavModal(true)}
+                        className="text-xs font-extrabold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3.5 py-2 rounded-xl"
+                      >
+                        ★ Hantera Smarta Mappar
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                      <button
+                        onClick={() => { setSelectedLiveGroup('ALL'); setRenderLimit(80); }}
+                        style={selectedLiveGroup === 'ALL' ? { backgroundColor: accentColor } : {}}
+                        className={`px-4 py-2 rounded-full text-xs font-extrabold shrink-0 transition ${
+                          selectedLiveGroup === 'ALL' ? 'text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+                        }`}
+                      >
+                        Alla kanaler ({channels.length})
+                      </button>
+
+                      {favLists.map((fl) => (
+                        <button
+                          key={fl.id}
+                          onClick={() => { setSelectedLiveGroup('FAV:' + fl.id); setRenderLimit(80); }}
+                          style={selectedLiveGroup === 'FAV:' + fl.id ? { backgroundColor: accentColor } : {}}
+                          className={`px-4 py-2 rounded-full text-xs font-extrabold shrink-0 transition flex items-center gap-1.5 ${
+                            selectedLiveGroup === 'FAV:' + fl.id
+                              ? 'text-white'
+                              : 'bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20'
+                          }`}
+                        >
+                          <span>★ {fl.name}</span>
+                          <span className="opacity-75">({(favItemsById[fl.id] || []).length})</span>
+                        </button>
+                      ))}
+
+                      {Object.keys(liveGroups).map((grp) => (
+                        <button
+                          key={grp}
+                          onClick={() => { setSelectedLiveGroup(grp); setRenderLimit(80); }}
+                          style={selectedLiveGroup === grp ? { backgroundColor: accentColor } : {}}
+                          className={`px-4 py-2 rounded-full text-xs font-bold shrink-0 transition ${
+                            selectedLiveGroup === grp ? 'text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+                          }`}
+                        >
+                          {grp} ({liveGroups[grp].length})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Kanalkort i IPTVX-stil */}
+                  {(() => {
+                    const list =
+                      selectedLiveGroup === 'ALL'
+                        ? channels
+                        : selectedLiveGroup.startsWith('FAV:')
+                        ? favItemsById[selectedLiveGroup.replace('FAV:', '')] || []
+                        : liveGroups[selectedLiveGroup] || [];
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                          {list.slice(0, renderLimit).map((ch) => {
+                            const epg = getChannelEpg(ch);
+                            const isPlaying = currentMedia?.id === ch.id;
+                            return (
+                              <div
+                                key={ch.id}
+                                onClick={() => startPlayback(ch, true)}
+                                className={`rounded-2xl bg-[#111215] border p-4 flex flex-col justify-between cursor-pointer transition hover:scale-[1.01] ${
+                                  isPlaying ? 'border-[#E50914] shadow-[0_0_20px_rgba(229,9,20,0.25)]' : 'border-white/10 hover:border-white/30'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <div className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center p-1.5 shrink-0">
+                                      {ch.logo ? (
+                                        <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                                      ) : (
+                                        <span className="text-xs font-black text-[#E50914]">LIVE</span>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <h3 className="text-xs sm:text-sm font-bold text-white truncate">{ch.name}</h3>
+                                      <div className="flex items-center gap-1.5 mt-1">
+                                        {ch.quality && (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/20 text-zinc-300">
+                                            {ch.quality}
+                                          </span>
+                                        )}
+                                        <span className="text-[10px] text-zinc-400 truncate">{ch.group}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setFavModalItem(ch);
+                                    }}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                                      allFavoritedIds.has(ch.id) ? 'bg-[#E50914] text-white' : 'bg-white/5 text-zinc-400 hover:text-white'
+                                    }`}
+                                  >
+                                    ★
+                                  </button>
+                                </div>
+
+                                <div className="mt-3 pt-2.5 border-t border-white/5 space-y-1">
+                                  {epg?.currentProg ? (
+                                    <>
+                                      <div className="flex justify-between text-[10px] text-zinc-400">
+                                        <span>{formatTime(epg.currentProg.start)} - {formatTime(epg.currentProg.stop)}</span>
+                                        <span>{epg.progress}%</span>
+                                      </div>
+                                      <p className="text-xs font-bold text-white truncate">{epg.currentProg.title}</p>
+                                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                                        <div style={{ width: `${epg.progress}%`, backgroundColor: accentColor }} className="h-full rounded-full" />
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <p className="text-[11px] text-zinc-500">EPG inte tillgänglig</p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {list.length > renderLimit && (
+                          <button
+                            onClick={() => setRenderLimit((prev) => prev + 100)}
+                            className="w-full py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-extrabold text-white transition"
+                          >
+                            Visa fler kanaler ({list.length - renderLimit} kvar)...
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 3. FLIK: TV-GUIDE (EXAKT SOM IPTVX MED TOPP-PREVIEW + TIDSLINJE-TABELL) */}
+              {!isFullscreenPlayer && activeTab === 'epg' && (
+                <div className="max-w-5xl mx-auto px-4 sm:px-8 py-4 space-y-5">
+                  
+                  {/* Topp-preview ruta (som i IMG_2601) */}
+                  <div className="rounded-2xl bg-[#0B0C0E] border border-white/15 overflow-hidden shadow-2xl">
+                    <div className="relative aspect-video max-h-[260px] w-full bg-black flex items-center justify-center">
+                      <span className="absolute top-3 left-3 z-20 bg-[#E50914] text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow">
+                        <span className="w-2 h-2 rounded-full bg-white live-dot" />
+                        LIVE
+                      </span>
+                      {currentMedia ? (
+                        <div className="text-center space-y-2 p-4">
+                          <p className="text-sm sm:text-base font-extrabold text-white">{currentMedia.name}</p>
+                          <button
+                            onClick={() => setIsFullscreenPlayer(true)}
+                            className="bg-white text-black font-extrabold px-5 py-2 rounded-full text-xs shadow"
+                          >
+                            ▶ Öppna i fullskärm
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-zinc-400">Välj en kanal nedan för att starta sändningen</p>
+                      )}
+                    </div>
+
+                    <div className="p-4 sm:p-5 border-t border-white/10 space-y-2">
+                      <h2 className="text-base sm:text-lg font-extrabold text-white truncate">
+                        {currentMedia ? currentMedia.name : 'Ingen kanal vald'}
+                      </h2>
+                      <p className="text-xs sm:text-sm font-bold text-zinc-300">
+                        {activeChannelEpg?.currentProg ? activeChannelEpg.currentProg.title : 'EPG inte tillgänglig'}
+                      </p>
+                      <p className="text-xs text-zinc-500 line-clamp-2">
+                        {activeChannelEpg?.currentProg?.desc || 'TV-guiden innehåller ingen information om programmet som visas just nu.'}
+                      </p>
+                      <div className="pt-2 flex items-center justify-between text-xs text-zinc-400">
+                        <span>
+                          {activeChannelEpg?.currentProg
+                            ? `${formatTime(activeChannelEpg.currentProg.start)} - ${formatTime(activeChannelEpg.currentProg.stop)}`
+                            : '20:00 - 21:00 (60 min)'}
+                        </span>
+                      </div>
+                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          style={{ width: `${activeChannelEpg?.progress || 45}%`, backgroundColor: accentColor }}
+                          className="h-full rounded-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sök & IDAG-indikator */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-3">
+                    <div className="flex items-center gap-6">
+                      <span style={{ color: accentColor }} className="text-xs sm:text-sm font-black uppercase tracking-wider border-b-2 border-[#E50914] pb-1">
+                        IDAG
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-zinc-400">
+                        {new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Sök kanal i TV-guiden..."
+                      value={epgSearch}
+                      onChange={(e) => setEpgSearch(e.target.value)}
+                      className="w-full sm:w-64 bg-zinc-900 border border-white/15 focus:border-[#E50914] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                    />
+                  </div>
+
+                  {/* IPTVX Tvåkolumns EPG-lista */}
+                  <div className="space-y-2.5">
+                    {channels
+                      .filter((ch) => !epgSearch || ch.name.toLowerCase().includes(epgSearch.toLowerCase()))
+                      .slice(0, 60)
+                      .map((ch) => {
+                        const info = getChannelEpg(ch);
+                        return (
+                          <div
+                            key={ch.id}
+                            onClick={() => startPlayback(ch, true)}
+                            className="grid grid-cols-12 rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#E50914] cursor-pointer transition"
+                          >
+                            {/* Vänster kolumn: Kanalinfo */}
+                            <div className="col-span-5 sm:col-span-4 p-3.5 bg-[#16181C] flex items-center gap-3 border-r border-white/10">
+                              <div className="w-10 h-10 rounded-lg bg-black border border-white/10 flex items-center justify-center p-1 shrink-0">
+                                {ch.logo ? (
+                                  <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                                ) : (
+                                  <span className="text-[10px] font-black text-[#E50914]">TV</span>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-xs sm:text-sm font-extrabold text-white truncate">{ch.name}</h4>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  {ch.quality && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/25 text-zinc-300">
+                                      {ch.quality}
+                                    </span>
+                                  )}
+                                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-[#E50914]/20 text-red-300">
+                                    LIVE
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Höger kolumn: Rödtonad programtablå */}
+                            <div className="col-span-7 sm:col-span-8 p-3.5 bg-gradient-to-r from-[#451010]/70 via-[#290909]/60 to-[#180707]/60 flex flex-col justify-center">
+                              {info?.currentProg ? (
+                                <>
+                                  <span className="text-[10px] font-bold text-red-200/80">
+                                    {formatTime(info.currentProg.start)} - {formatTime(info.currentProg.stop)}
+                                  </span>
+                                  <p className="text-xs sm:text-sm font-extrabold text-white truncate mt-0.5">
+                                    {info.currentProg.title}
+                                  </p>
+                                  {info.nextProg && (
+                                    <p className="text-[11px] text-zinc-400 truncate mt-1">
+                                      Nästa ({formatTime(info.nextProg.start)}): {info.nextProg.title}
+                                    </p>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-[10px] text-zinc-400">
+                                    {new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                  <p className="text-xs sm:text-sm font-bold text-zinc-200 mt-0.5">EPG inte tillgänglig</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. FLIK: INSTÄLLNINGAR (EXAKT SOM IMG_2603 & IMG_2604 MED "PRENUMERANT"-BADGE) */}
+              {!isFullscreenPlayer && activeTab === 'settings' && (
+                <div className="max-w-2xl mx-auto px-4 sm:px-8 py-6 space-y-6">
+                  
+                  {/* Gul/Guld PRENUMERANT-badge högst upp */}
+                  <div className="flex flex-col items-center justify-center space-y-2 pt-2">
+                    <span className="bg-[#F59E0B] text-black font-black text-xs sm:text-sm tracking-wider uppercase px-5 py-1.5 rounded-full shadow-[0_0_25px_rgba(245,158,11,0.4)]">
+                      PRENUMERANT • ROYAL EDITION
+                    </span>
+                    <span className="text-xs text-zinc-400">{user.email}</span>
+                  </div>
+
+                  {/* Undervyer i Inställningar */}
+                  {settingsSubView === 'sources' ? (
+                    <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-6">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                        <h2 className="text-base font-extrabold text-white">📂 Spellista Hantering & EPG</h2>
+                        <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#E50914]">
+                          ← Tillbaka
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-2">
+                          <label className="text-xs font-extrabold text-white block">1. Ladda upp M3U-fil (Snabbast & utan CORS)</label>
+                          <input
+                            type="file"
+                            accept=".m3u,.m3u8,.txt"
+                            onChange={handleFileUpload}
+                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#E50914] file:text-white file:font-bold cursor-pointer"
+                          />
+                        </div>
+
+                        <form onSubmit={handleLoadM3uUrl} className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-3">
+                          <label className="text-xs font-extrabold text-white block">2. Ladda M3U via URL-länk</label>
+                          <input
+                            type="url"
+                            placeholder="https://..."
+                            value={m3uUrl || savedM3uUrl}
+                            onChange={(e) => setM3uUrl(e.target.value)}
+                            className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                          />
+                          <button type="submit" style={{ backgroundColor: accentColor }} className="w-full py-2.5 rounded-xl text-xs font-extrabold text-white">
+                            Hämta & Cachelagra Spellista
+                          </button>
+                        </form>
+
+                        <div className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-2">
+                          <label className="text-xs font-extrabold text-white block">3. Ladda upp EPG (.xml) eller ange URL</label>
+                          <input
+                            type="file"
+                            accept=".xml"
+                            onChange={handleEpgFileUpload}
+                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-zinc-800 file:text-white file:font-bold cursor-pointer mb-2"
+                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="url"
+                              placeholder="http://... (XMLTV EPG URL)"
+                              value={epgUrl}
+                              onChange={(e) => setEpgUrl(e.target.value)}
+                              className="flex-1 bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => loadEpgFromUrl(epgUrl)}
+                              className="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-xs font-bold"
+                            >
+                              Ladda EPG
+                            </button>
+                          </div>
+                        </div>
+
+                        {(statusMsg || epgStatus) && (
+                          <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold text-emerald-300 text-center">
+                            {statusMsg || epgStatus}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : settingsSubView === 'appearance' ? (
+                    <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-5">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                        <h2 className="text-base font-extrabold text-white">🎨 Tillägg: teman och utseende</h2>
+                        <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#E50914]">
+                          ← Tillbaka
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
+                          <div>
+                            <p className="text-sm font-bold text-white">Färgtema</p>
+                            <p className="text-xs text-zinc-400">Välj mellan IPTVX Crimson Red eller MagnersKing Royal Gold</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setAccentTheme('crimson')}
+                              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border ${
+                                accentTheme === 'crimson' ? 'bg-[#E50914] text-white border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
+                              }`}
+                            >
+                              🔴 IPTVX Röd
+                            </button>
+                            <button
+                              onClick={() => setAccentTheme('gold')}
+                              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border ${
+                                accentTheme === 'gold' ? 'bg-[#D4A346] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
+                              }`}
+                            >
+                              👑 Royal Guld
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
+                          <div>
+                            <p className="text-sm font-bold text-white">Smart-TV / Storskärmsläge</p>
+                            <p className="text-xs text-zinc-400">Förstorar text och knappar för visning på TV</p>
+                          </div>
+                          <button
+                            onClick={() => setTvMode(!tvMode)}
+                            className={`px-4 py-2 rounded-xl text-xs font-extrabold ${
+                              tvMode ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300'
+                            }`}
+                          >
+                            {tvMode ? 'PÅ' : 'AV'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* IPTVX Menylista med röda ikoner till vänster och › till höger */
+                    <div className="bg-[#0B0C0E] border border-white/10 rounded-2xl divide-y divide-white/10 overflow-hidden shadow-2xl">
+                      {[
+                        { icon: '👑', label: 'In-App-köp & Kvittot (Royal Active)', action: () => alert('MAGNERSKING Royal Cinema Edition är aktiverad på ditt konto.') },
+                        { icon: '🎨', label: 'Tillägg: teman och utseende', action: () => setSettingsSubView('appearance') },
+                        { icon: '☁️', label: 'Moln-synkronisering (Supabase Cloud)', action: () => { saveToCloud(favLists); alert('Dina Smarta Mappar är synkroniserade med molnet!'); } },
+                        { icon: '✨', label: 'AI & Smarta Favoritmappar', action: () => setManageFavModal(true) },
+                        { icon: '📋', label: 'Spellista Hantering (M3U & EPG)', action: () => setSettingsSubView('sources') },
+                        { icon: '▶', label: `Spelare (${playerEngine.toUpperCase()})`, action: () => {
+                          const order = ['auto', 'mpegts', 'hls', 'native'];
+                          const next = order[(order.indexOf(playerEngine) + 1) % order.length];
+                          setPlayerEngine(next);
+                        }},
+                        { icon: '📡', label: 'Live & TV-guide', action: () => setActiveTab('epg') },
+                        { icon: '📝', label: 'Metadata & Rensa Lokal Cache', action: handleClearCache },
+                        { icon: '🖥️', label: 'MAGNERSKING Media Server & VLC Bridge', action: () => alert('VLC och PotPlayer-bryggan är redo. Klicka på "Spela i VLC" under valfri kanal för direktuppspelning.') },
+                        { icon: '⚙️', label: `Generali (TV-läge: ${tvMode ? 'PÅ' : 'AV'})`, action: () => setTvMode(!tvMode) },
+                        { icon: '🚪', label: 'Logga ut från konto', action: handleLogout }
+                      ].map((row, i) => (
+                        <button
+                          key={i}
+                          onClick={row.action}
+                          className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/5 transition text-left group"
+                        >
+                          <div className="flex items-center gap-4">
+                            <span style={{ color: accentColor }} className="text-lg w-6 text-center">
+                              {row.icon}
+                            </span>
+                            <span className="text-sm font-semibold text-white group-hover:text-red-400 transition">
+                              {row.label}
+                            </span>
+                          </div>
+                          <span className="text-zinc-500 text-lg font-bold group-hover:translate-x-1 transition">›</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-center pt-4">
+                    <span className="text-xs text-zinc-600 font-semibold">Version 25.0.7 • MAGNERSKING Royal Edition</span>
+                  </div>
+                </div>
+              )}
+            </main>
+          ) : (
+            /* Ej inloggad vy */
+            <div className="flex-1 flex items-center justify-center p-6 z-10">
+              <div className="bg-[#111215] p-10 rounded-3xl text-center space-y-4 max-w-sm border border-white/10 shadow-2xl">
+                <div style={{ backgroundColor: accentColor }} className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-lg">
+                  👑
+                </div>
+                <h2 className="text-lg font-black text-white">MAGNERSKING IPTVX</h2>
+                <p className="text-xs text-zinc-400">Logga in för att synka dina smarta mappar och ladda din spellista.</p>
+                <button
+                  onClick={() => setAuthModal(true)}
+                  style={{ backgroundColor: accentColor }}
+                  className="w-full text-white font-extrabold px-5 py-3 rounded-2xl text-xs shadow-lg"
+                >
+                  Logga in nu
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* FLYTANDE MINI-PLAYER NERE TILL HÖGER NÄR MAN BLÄDDRAR RUNT */}
+          {user && currentMedia && !isFullscreenPlayer && (
+            <div className="fixed bottom-16 sm:bottom-6 left-4 sm:left-6 z-40 w-72 sm:w-80 rounded-2xl bg-[#111215]/95 backdrop-blur-xl border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex items-center gap-3 p-2.5">
+              <div
+                onClick={() => setIsFullscreenPlayer(true)}
+                className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center shrink-0 cursor-pointer relative overflow-hidden"
+              >
+                {currentMedia.logo ? (
+                  <img src={currentMedia.logo} alt="" className="max-w-full max-h-full object-contain" />
+                ) : (
+                  <span className="text-xs font-black text-[#E50914]">▶</span>
+                )}
+              </div>
+              <div onClick={() => setIsFullscreenPlayer(true)} className="min-w-0 flex-1 cursor-pointer">
+                <span className="text-[9px] font-black uppercase text-[#E50914] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E50914] live-dot" />
+                  SPELAR NU
+                </span>
+                <p className="text-xs font-extrabold text-white truncate">{currentMedia.name}</p>
+              </div>
+              <button
+                onClick={() => setIsFullscreenPlayer(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold"
+                title="Fullskärm"
+              >
+                ⛶
+              </button>
+              <button
+                onClick={() => setCurrentMedia(null)}
+                className="px-2 py-1.5 text-zinc-400 hover:text-white text-xs font-bold"
+                title="Stäng"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* RÖD RUNDA SVÄVANDE MENYKNAPP NERE TILL HÖGER (SOM I IPTVX SKÄRMDUMPARNA) */}
+          {user && (
+            <button
+              onClick={() => setQuickDrawer(!quickDrawer)}
+              style={{ backgroundColor: accentColor }}
+              className="fixed bottom-16 sm:bottom-6 right-5 z-40 w-14 h-14 rounded-full text-white flex items-center justify-center text-2xl font-black shadow-[0_8px_30px_rgba(229,9,20,0.6)] hover:scale-105 transition"
+              title="Snabbmeny"
+            >
+              {quickDrawer ? '✕' : '☰'}
+            </button>
+          )}
+
+          {/* SNABBMENY-POPUP FRÅN DEN RÖDA KNAPPEN */}
+          {quickDrawer && (
+            <div className="fixed bottom-32 sm:bottom-24 right-5 z-40 w-64 rounded-2xl bg-[#121316]/95 backdrop-blur-xl border border-white/15 p-3 space-y-1.5 shadow-2xl">
+              <div className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 px-3 py-1">
+                Snabbnavigering
+              </div>
+              {[
+                { label: '🔍 Sök i hela katalogen', action: () => { setSearchModal(true); setQuickDrawer(false); } },
+                { label: '★ Dina Smarta Mappar', action: () => { setManageFavModal(true); setQuickDrawer(false); } },
+                { label: '📂 Ladda M3U / EPG', action: () => { setActiveTab('settings'); setSettingsSubView('sources'); setQuickDrawer(false); } },
+                { label: '📺 Gå till Live TV', action: () => { setActiveTab('live'); setIsFullscreenPlayer(false); setQuickDrawer(false); } },
+                { label: '📅 Gå till TV-guide', action: () => { setActiveTab('epg'); setIsFullscreenPlayer(false); setQuickDrawer(false); } }
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={item.action}
+                  className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-[#E50914] transition block"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* DETALJ- & AVSNITTS-MODAL FÖR SERIER OCH FILMER */}
+          {detailItem && (
+            <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-50 flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-[#121316] border border-white/15 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl my-auto">
+                <div className="relative h-56 sm:h-64 bg-zinc-900 flex items-end p-6">
+                  {detailItem.logo && (
+                    <img src={detailItem.logo} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#121316] via-[#121316]/50 to-transparent" />
+                  <button
+                    onClick={() => setDetailItem(null)}
+                    className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/70 text-white flex items-center justify-center text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                  <div className="relative z-10 space-y-2 w-full">
+                    <div className="flex items-center gap-2">
+                      <span style={{ backgroundColor: accentColor }} className="text-[10px] font-black uppercase px-2 py-0.5 rounded text-white">
+                        {detailItem.isSeriesShow ? 'SERIE' : 'DETALJER'}
+                      </span>
+                      <span className="text-xs text-amber-400 font-bold">★ {detailItem.rating || '8,1'}</span>
+                      <span className="text-xs text-zinc-400">{detailItem.group}</span>
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-black text-white">{detailItem.name}</h2>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto thin-scrollbar">
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        const firstTarget = detailItem.isSeriesShow ? detailItem.episodes[0] : detailItem;
+                        startPlayback(firstTarget, true);
+                      }}
+                      className="bg-white hover:bg-zinc-200 text-black font-extrabold px-6 py-3 rounded-full text-xs flex items-center gap-2"
+                    >
+                      <span>▶</span>
+                      <span>{detailItem.isSeriesShow ? 'Spela Avsnitt 1' : 'Spela upp nu'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => setFavModalItem(detailItem)}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-5 py-3 rounded-full text-xs border border-white/10"
+                    >
+                      ★ Lägg i Favoriter
+                    </button>
+
+                    <button
+                      onClick={() => openInExternalPlayer('vlc', detailItem.isSeriesShow ? detailItem.episodes[0] : detailItem)}
+                      className="bg-[#FF6B00] text-white font-bold px-5 py-3 rounded-full text-xs"
+                    >
+                      🟠 Öppna i VLC
+                    </button>
+                  </div>
+
+                  {/* Om det är en serie med flera avsnitt */}
+                  {detailItem.isSeriesShow && detailItem.episodes?.length > 0 && (
+                    <div className="space-y-3 pt-2 border-t border-white/10">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-extrabold text-white">
+                          Avsnitt ({detailItem.episodes.length} st)
+                        </h3>
+                        {(() => {
+                          const seasons = Array.from(new Set(detailItem.episodes.map((e) => e.season || 1))).sort((a, b) => a - b);
+                          if (seasons.length <= 1) return null;
+                          return (
+                            <select
+                              value={selectedSeason}
+                              onChange={(e) => setSelectedSeason(parseInt(e.target.value, 10))}
+                              className="bg-zinc-900 border border-white/15 rounded-xl px-3 py-1.5 text-xs font-bold text-white outline-none"
+                            >
+                              {seasons.map((s) => (
+                                <option key={s} value={s}>Säsong {s}</option>
+                              ))}
+                            </select>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="space-y-2">
+                        {detailItem.episodes
+                          .filter((ep) => !ep.season || ep.season === selectedSeason)
+                          .map((ep, idx) => (
+                            <div
+                              key={ep.id}
+                              onClick={() => startPlayback(ep, true)}
+                              className="p-3 rounded-xl bg-black/60 hover:bg-white/10 border border-white/10 flex items-center justify-between cursor-pointer transition"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className="text-xs font-black text-zinc-500 w-6">{ep.episode || idx + 1}.</span>
+                                <span className="text-xs font-bold text-white truncate">{ep.name}</span>
+                              </div>
+                              <span className="text-xs font-extrabold text-[#E50914] shrink-0">▶ Spela</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* GLOBAL SÖK-MODAL */}
+          {searchModal && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex flex-col p-4 sm:p-8">
+              <div className="max-w-4xl mx-auto w-full space-y-5 flex-1 flex flex-col overflow-hidden">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">🔍</span>
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Sök efter kanaler, filmer, serier eller kategorier..."
+                      value={globalSearch}
+                      onChange={(e) => setGlobalSearch(e.target.value)}
+                      className="w-full bg-zinc-900 border border-white/20 focus:border-[#E50914] rounded-2xl pl-11 pr-4 py-3.5 text-sm text-white outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={() => { setSearchModal(false); setGlobalSearch(''); }}
+                    className="bg-zinc-800 hover:bg-zinc-700 px-4 py-3.5 rounded-2xl text-xs font-extrabold"
+                  >
+                    Stäng
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto thin-scrollbar grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 content-start">
+                  {searchResults.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setSearchModal(false);
+                        handleCardSelect(item);
+                      }}
+                      className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 hover:border-[#E50914] cursor-pointer flex items-center gap-3 transition"
+                    >
+                      <div className="w-11 h-11 rounded-xl bg-black flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                        {item.logo ? (
+                          <img src={item.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                        ) : (
+                          <span className="text-xs font-bold text-[#E50914]">▶</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[9px] font-black uppercase text-amber-400 block">{item.type}</span>
+                        <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
+                        <p className="text-[10px] text-zinc-400 truncate">{item.group}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* INLOGGNINGS-MODAL */}
+          {authModal && (
+            <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+              <div className="bg-[#111215] border border-white/15 rounded-3xl w-full max-w-sm p-7 space-y-5 shadow-2xl">
+                <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">👑</span>
+                    <h3 className="font-extrabold text-base text-white">{isSignUp ? 'Skapa Royal-konto' : 'Logga in i MAGNERSKING'}</h3>
+                  </div>
+                  {user && (
+                    <button onClick={() => setAuthModal(false)} className="text-sm font-bold text-zinc-400 hover:text-white">
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="p-3.5 bg-black/60 border border-white/10 rounded-2xl">
+                  <p className="text-[11px] text-zinc-400 leading-relaxed text-center">
+                    <strong className="text-amber-400">Användarvillkor:</strong> Denna applikation tillhandahåller enbart en mediaspelare. Användaren ansvarar fullt ut för att endast använda lagliga M3U-filer och strömmar.
+                  </p>
+                </div>
+
+                <form onSubmit={handleAuth} className="space-y-3.5" autoComplete="on">
+                  <input
+                    ref={emailInputRef}
+                    type="email"
+                    defaultValue={savedEmailDefault}
+                    placeholder="E-postadress"
+                    autoComplete="email"
+                    className="w-full bg-black border border-white/15 focus:border-[#E50914] rounded-2xl px-4 py-3 text-xs text-white outline-none"
+                    required
+                  />
+                  <input
+                    ref={passwordInputRef}
+                    type="password"
+                    placeholder="Lösenord"
+                    autoComplete="current-password"
+                    className="w-full bg-black border border-white/15 focus:border-[#E50914] rounded-2xl px-4 py-3 text-xs text-white outline-none"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    style={{ backgroundColor: accentColor }}
+                    className="w-full text-white font-extrabold py-3 rounded-2xl text-xs shadow-lg transition hover:brightness-110"
+                  >
+                    {isSignUp ? 'Registrera Konto' : 'Logga in'}
+                  </button>
+                </form>
+                <div className="text-center pt-1">
+                  <button onClick={() => setIsSignUp(!isSignUp)} className="text-xs text-amber-400 hover:underline font-semibold">
+                    {isSignUp ? 'Har du redan konto? Logga in' : 'Inget konto? Skapa ett här'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* LÄGG TILL I FAVORITMAPP-MODAL */}
+          {favModalItem && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-[#121316] border border-white/20 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+                <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                  <h3 className="font-extrabold text-sm text-white">★ Lägg till i Favoritmapp</h3>
+                  <button onClick={() => setFavModalItem(null)} className="text-sm font-bold text-zinc-400">
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {favLists.map((list) => {
+                    const checked = (list.channelIds || []).includes(favModalItem.id);
+                    return (
+                      <div
+                        key={list.id}
+                        onClick={() => toggleChannelInFavList(list.id, favModalItem.id)}
+                        className={`p-3.5 rounded-2xl border flex justify-between items-center cursor-pointer transition ${
+                          checked ? 'bg-red-950/60 border-[#E50914] text-white' : 'bg-black/50 border-white/10 text-zinc-300'
+                        }`}
+                      >
+                        <span className="text-xs font-bold">★ {list.name}</span>
+                        <span className="text-xs font-extrabold text-amber-400">{checked ? '✓ Tillagd' : '+ Välj'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* HANTERA SMARTA FAVORITMAPPAR-MODAL */}
+          {manageFavModal && (
+            <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-[#121316] border border-white/20 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl">
+                <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                  <h3 className="font-extrabold text-base text-white">👑 Smarta Favoritmappar</h3>
+                  <button onClick={() => setManageFavModal(false)} className="text-sm font-bold text-zinc-400 hover:text-white">
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateFavList} className="space-y-3.5 bg-black/60 p-4 rounded-2xl border border-white/10">
+                  <p className="text-xs text-amber-400 font-bold">Skapa ny mapp (Manuell eller Auto-regel):</p>
+                  <input
+                    type="text"
+                    placeholder="1. Namn på favoritmappen (t.ex. Sverige FHD)"
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                    required
+                  />
+                  <select
+                    value={newListGroup}
+                    onChange={(e) => setNewListGroup(e.target.value)}
+                    className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                  >
+                    <option value="ALL">Alla mappar (eller välj en specifik nedan)</option>
+                    {allAvailableGroups.map((grp) => (
+                      <option key={grp} value={grp}>📁 {grp}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="3. Namn måste innehålla (t.ex. FHD, 4K, SVT...)"
+                    value={newListFilter}
+                    onChange={(e) => setNewListFilter(e.target.value)}
+                    className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                  />
+                  <button
+                    type="submit"
+                    style={{ backgroundColor: accentColor }}
+                    className="w-full text-white font-extrabold py-2.5 rounded-xl text-xs shadow-lg"
+                  >
+                    + Skapa & Synka Smart Mapp
+                  </button>
+                </form>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto thin-scrollbar">
+                  {favLists.map((list) => {
+                    const items = favItemsById[list.id] || [];
+                    return (
+                      <div key={list.id} className="p-3.5 rounded-2xl bg-black/60 border border-white/10 flex justify-between items-center">
+                        <div>
+                          <span className="text-xs font-bold text-white block">
+                            ★ {list.name} ({items.length} st)
+                          </span>
+                          {(list.filter || (list.filterGroup && list.filterGroup !== 'ALL')) && (
+                            <span className="text-[10px] text-amber-400">
+                              Regel: {list.filterGroup && list.filterGroup !== 'ALL' ? list.filterGroup : 'Alla'}{' '}
+                              {list.filter ? `+ "${list.filter}"` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <button onClick={() => handleDeleteFavList(list.id)} className="text-xs text-red-400 hover:text-red-300 font-bold">
+                          Ta bort
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MOBIL BOTTENMENY (SYNS PÅ MOBIL/SURFPLATTA FÖR ÄKTA APP-KÄNSLA) */}
+          {user && (
+            <nav className="sm:hidden fixed bottom-0 left-0 right-0 h-14 bg-black/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around z-30 px-2">
+              {[
+                { id: 'home', label: 'För dig', icon: '🏠' },
+                { id: 'movies', label: 'Film', icon: '🎬' },
+                { id: 'series', label: 'Serie', icon: '🍿' },
+                { id: 'live', label: 'Live', icon: '📺' },
+                { id: 'epg', label: 'TV-guide', icon: '📅' },
+                { id: 'settings', label: 'Meny', icon: '⚙️' }
+              ].map((t) => {
+                const active = activeTab === t.id && !isFullscreenPlayer;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setActiveTab(t.id);
+                      setExpandedCategory(null);
+                      setIsFullscreenPlayer(false);
+                    }}
+                    className={`flex flex-col items-center justify-center py-1 px-2 ${
+                      active ? 'text-[#E50914] font-extrabold' : 'text-zinc-400'
+                    }`}
+                  >
+                    <span className="text-base leading-none">{t.icon}</span>
+                    <span className="text-[9px] mt-1">{t.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
