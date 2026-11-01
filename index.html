@@ -1214,19 +1214,22 @@
         }
       };
 
-      // --- VIDEOSPELARMOTOR ---
+    // --- SMART SJÄLVUPPLÅSANDE VIDEOSPELARMOTOR (DIREKT I FÖNSTRET) ---
       useEffect(() => {
         const video = videoRef.current;
-        const mediaUrl = currentMedia?.url;
-        if (!video || !mediaUrl || !user) return;
+        const rawMediaUrl = currentMedia?.url?.trim();
+        if (!video || !rawMediaUrl || !user) return;
 
         setVideoError(null);
-        retryCountRef.current = 0;
         let hls = null;
         let mpegtsPlayer = null;
+        let isCancelled = false;
 
         const cleanUp = () => {
-          if (hls) { hls.destroy(); hls = null; }
+          if (hls) {
+            try { hls.destroy(); } catch (e) {}
+            hls = null;
+          }
           if (mpegtsPlayer) {
             try {
               mpegtsPlayer.pause();
@@ -1242,11 +1245,6 @@
 
         cleanUp();
 
-        const lowerUrl = mediaUrl.toLowerCase();
-        const isM3U8 = lowerUrl.includes('.m3u8');
-        const isDirectFile = /\.(mp4|mkv|avi|mov|webm)$/i.test(lowerUrl);
-        const isLikelyTS = lowerUrl.endsWith('.ts') || (!isM3U8 && !isDirectFile);
-
         const applySavedTime = () => {
           const saved = watchProgress[currentMedia.id];
           if (saved && saved.time > 10 && currentMedia.type !== 'live' && currentMedia.type !== 'vod_channel') {
@@ -1254,86 +1252,165 @@
           }
         };
 
-        const startMpegTs = () => {
-          if (window.mpegts && window.mpegts.isSupported()) {
-            try {
-              mpegtsPlayer = window.mpegts.createPlayer({
-                type: 'mpegts',
-                isLive: currentMedia.type === 'live' || currentMedia.type === 'vod_channel',
-                url: mediaUrl,
-                cors: true
-              }, { enableWorker: true, lazyLoadMaxDuration: 3 * 60, seekType: 'range' });
-              mpegtsPlayer.attachMediaElement(video);
-              mpegtsPlayer.load();
-              mpegtsPlayer.play().catch(() => {});
-              mpegtsPlayer.on(window.mpegts.Events.ERROR, () => {
-                if (retryCountRef.current < 1) {
-                  retryCountRef.current += 1;
-                  setTimeout(() => {
-                    try { mpegtsPlayer.unload(); mpegtsPlayer.load(); mpegtsPlayer.play().catch(() => {}); } catch (e) {}
-                  }, 1200);
-                } else {
-                  setVideoError('Webbläsaren blockerar strömmen (CORS/HTTP-spärr). Klicka på "Öppna i VLC" eller "Ladda ner .m3u" nedan för att spela direkt!');
+        const buildCandidateQueue = (url, engineMode) => {
+          const queue = [];
+          const lower = url.toLowerCase();
+          const isDirectVodFile = /\.(mp4|mkv|avi|mov|webm)(\?.*)?$/i.test(lower);
+          const isM3u8 = lower.includes('.m3u8');
+
+          let m3u8Variant = null;
+          const xtreamLiveMatch = url.match(/^(https?:\/\/[^\/]+)\/(?:live\/)?([^\/]+)\/([^\/]+)\/(\d+)(?:\.ts|\.m3u8)?$/i);
+          if (xtreamLiveMatch) {
+            const [, origin, u, p, streamId] = xtreamLiveMatch;
+            m3u8Variant = `${origin}/live/${u}/${p}/${streamId}.m3u8`;
+          } else if (lower.endsWith('.ts')) {
+            m3u8Variant = url.replace(/\.ts$/i, '.m3u8');
+          }
+
+          const wrapCors = (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`;
+
+          if (engineMode === 'native' || isDirectVodFile) {
+            queue.push({ type: 'native', url });
+            queue.push({ type: 'native', url: wrapCors(url) });
+            return queue;
+          }
+
+          if (engineMode === 'hls') {
+            if (m3u8Variant) queue.push({ type: 'hls', url: m3u8Variant });
+            queue.push({ type: 'hls', url });
+            if (m3u8Variant) queue.push({ type: 'hls', url: wrapCors(m3u8Variant) });
+            queue.push({ type: 'hls', url: wrapCors(url) });
+            return queue;
+          }
+
+          if (engineMode === 'mpegts') {
+            queue.push({ type: 'mpegts', url });
+            queue.push({ type: 'mpegts', url: wrapCors(url) });
+            return queue;
+          }
+
+          if (isM3u8) {
+            queue.push({ type: 'hls', url });
+            queue.push({ type: 'hls', url: wrapCors(url) });
+            queue.push({ type: 'native', url });
+          } else {
+            if (m3u8Variant) queue.push({ type: 'hls', url: m3u8Variant });
+            queue.push({ type: 'mpegts', url });
+            if (m3u8Variant) queue.push({ type: 'hls', url: wrapCors(m3u8Variant) });
+            queue.push({ type: 'mpegts', url: wrapCors(url) });
+            if (m3u8Variant) queue.push({ type: 'native', url: m3u8Variant });
+            queue.push({ type: 'native', url });
+          }
+
+          return queue;
+        };
+
+        const candidates = buildCandidateQueue(rawMediaUrl, playerEngine);
+        let currentIdx = 0;
+
+        const tryNextCandidate = () => {
+          if (isCancelled) return;
+          cleanUp();
+
+          if (currentIdx >= candidates.length) {
+            setVideoError(
+              'För att spela okrypterade HTTP-kanaler direkt i fönstret: Klicka på ikonen till vänster om zappaportalen.se i adressfältet -> Webbplatsinställningar -> ändra "Osäkert innehåll" (Insecure content) till "Tillåt". Då spelas alla kanaler direkt här i rutan!'
+            );
+            return;
+          }
+
+          const candidate = candidates[currentIdx++];
+          const targetUrl = candidate.url;
+
+          if (candidate.type === 'hls') {
+            if (window.Hls && window.Hls.isSupported()) {
+              hls = new window.Hls({
+                enableWorker: true,
+                lowLatencyMode: true,
+                manifestLoadingTimeOut: 7000,
+                manifestLoadingMaxRetry: 1,
+                levelLoadingTimeOut: 7000
+              });
+              hls.loadSource(targetUrl);
+              hls.attachMedia(video);
+
+              hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+                if (isCancelled) return;
+                applySavedTime();
+                video.play().catch(() => {});
+              });
+
+              hls.on(window.Hls.Events.ERROR, (event, data) => {
+                if (data.fatal && !isCancelled) {
+                  tryNextCandidate();
                 }
               });
-            } catch (err) {
-              setVideoError('Det är ett problem med streamingen i webbläsaren. Öppna i VLC nedan.');
+            } else {
+              tryNextCandidate();
+            }
+          } else if (candidate.type === 'mpegts') {
+            if (window.mpegts && window.mpegts.isSupported()) {
+              try {
+                mpegtsPlayer = window.mpegts.createPlayer(
+                  {
+                    type: 'mpegts',
+                    isLive: currentMedia.type === 'live' || currentMedia.type === 'vod_channel',
+                    url: targetUrl,
+                    cors: true
+                  },
+                  {
+                    enableWorker: true,
+                    lazyLoadMaxDuration: 3 * 60,
+                    seekType: 'range',
+                    liveBufferLatencyChasing: true
+                  }
+                );
+                mpegtsPlayer.attachMediaElement(video);
+                mpegtsPlayer.load();
+                mpegtsPlayer.play().catch(() => {});
+
+                let hasStartedPlaying = false;
+                const onPlaying = () => { hasStartedPlaying = true; };
+                video.addEventListener('playing', onPlaying, { once: true });
+
+                const timeoutId = setTimeout(() => {
+                  if (!hasStartedPlaying && !isCancelled) {
+                    tryNextCandidate();
+                  }
+                }, 6000);
+
+                mpegtsPlayer.on(window.mpegts.Events.ERROR, () => {
+                  clearTimeout(timeoutId);
+                  if (!isCancelled) tryNextCandidate();
+                });
+              } catch (err) {
+                tryNextCandidate();
+              }
+            } else {
+              tryNextCandidate();
             }
           } else {
-            setVideoError('MPEG-TS stöds ej i denna webbläsare. Klicka på "Öppna i VLC" nedan.');
+            video.src = targetUrl;
+            video.addEventListener('loadedmetadata', applySavedTime, { once: true });
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(() => {
+                if (!isCancelled) tryNextCandidate();
+              });
+            }
+            video.onerror = () => {
+              if (!isCancelled) tryNextCandidate();
+            };
           }
         };
 
-        const startHls = (allowFallbackToTs = false) => {
-          if (window.Hls && window.Hls.isSupported()) {
-            hls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
-            hls.loadSource(mediaUrl);
-            hls.attachMedia(video);
-            hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-              applySavedTime();
-              video.play().catch(() => {});
-            });
-            hls.on(window.Hls.Events.ERROR, (event, data) => {
-              if (data.fatal) {
-                if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && retryCountRef.current < 2) {
-                  retryCountRef.current += 1;
-                  hls.startLoad();
-                } else {
-                  hls.destroy();
-                  hls = null;
-                  if (allowFallbackToTs) startMpegTs();
-                  else setVideoError('Webbläsaren kan inte spela strömmen direkt (CORS/Codec). Klicka på "Öppna i VLC" nedan.');
-                }
-              }
-            });
-          } else {
-            video.src = mediaUrl;
-            video.addEventListener('loadedmetadata', applySavedTime, { once: true });
-            video.play().catch(() => {
-              setVideoError('Kunde ej starta uppspelning i webbläsaren. Klicka på "Öppna i VLC" nedan.');
-            });
-          }
+        tryNextCandidate();
+
+        return () => {
+          isCancelled = true;
+          cleanUp();
         };
-
-        if (playerEngine === 'mpegts') startMpegTs();
-        else if (playerEngine === 'hls') startHls(false);
-        else if (playerEngine === 'native') {
-          video.src = mediaUrl;
-          video.addEventListener('loadedmetadata', applySavedTime, { once: true });
-          video.play().catch(() => {});
-        } else {
-          if (isDirectFile) {
-            video.src = mediaUrl;
-            video.addEventListener('loadedmetadata', applySavedTime, { once: true });
-            video.play().catch(() => {});
-          } else if (isM3U8) startHls(true);
-          else if (isLikelyTS) startMpegTs();
-          else startHls(true);
-        }
-
-        return cleanUp;
       }, [currentMedia, user, playerEngine]);
-
       const getChannelEpg = (ch) => {
         if (!ch || Object.keys(epgData).length === 0) return null;
         const cleanName = ch.name.toLowerCase().replace(/\s+(hd|fhd|uhd|4k|se|uk|us|\[\-?\d+h\])$/gi, '').trim();
