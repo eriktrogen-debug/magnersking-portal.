@@ -31,6 +31,9 @@
   <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- Google AdSense Script (För 'free'-versionen, byt ut ca-pub-XXXXXXXXXXXXXXXX mot ditt eget AdSense-ID) -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0000000000000000" crossorigin="anonymous"></script>
+
   <style>
     :root {
       --accent: #F3D078;
@@ -92,6 +95,13 @@
     .live-dot {
       animation: pulse-live 1.8s infinite ease-in-out;
     }
+    @keyframes spin-fast {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .spinner {
+      animation: spin-fast 0.8s linear infinite;
+    }
   </style>
 
   <!-- Säker PWA-laddare med Zappaportalen-ikon (Z) -->
@@ -140,16 +150,26 @@
   </script>
 </head>
 <body>
-  <!-- Laddningsskärm tills React tar över -->
   <div id="root">
     <div style="height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #F3D078; font-family: sans-serif;">
       <div style="width: 56px; height: 56px; border-radius: 999px; background: #F3D078; color: #000; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 26px; margin-bottom: 14px;">Z</div>
-      <div style="font-weight: 800; font-size: 14px; letter-spacing: 2px;">STARTAR ZAPPAPORTALEN...</div>
+      <div style="font-weight: 800; font-size: 14px; letter-spacing: 2px;">STARTAR ZAPPAPORTALEN v25.4.0...</div>
     </div>
   </div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo } = React;
+
+    // ============================================================================
+    // PUNKT 8: ARKITEKTUR FÖR TVÅ VERSIONER AV APPEN ('free' vs 'premium')
+    // ============================================================================
+    // Sätt DEFAULT_APP_EDITION till:
+    // - 'free'    -> Gratisversion med Google AdSense-reklam, öppen för alla.
+    // - 'premium' -> Royal-version med Supabase-inloggning & Betalvägg.
+    const DEFAULT_APP_EDITION = 'free'; 
+    const GOOGLE_ADSENSE_CLIENT = 'ca-pub-0000000000000000'; // Byt till ditt Google AdSense Publisher ID
+    const GOOGLE_ADSENSE_SLOT = '1234567890';               // Byt till ditt AdUnit Slot ID
+    const STRIPE_OR_PAYMENT_LINK = 'https://zappaportalen.se'; // Länk till din betalningssida/Swish/Stripe
 
     // --- SUPABASE KONFIGURATION ---
     const SUPABASE_URL = 'https://lsysoujotuheynaxzdru.supabase.co';
@@ -162,6 +182,70 @@
     } catch (e) {
       console.warn('Supabase kunde ej initieras:', e);
     }
+
+    // ============================================================================
+    // PUNKT 2: AUTOMATISK KRASCHRAPPORT & FELSÖKNING (window.onerror & unhandledrejection)
+    // ============================================================================
+    const CRASH_WEBHOOK_URL = ''; // Valfri Discord/Slack/Make.com webhook URL utöver Supabase
+
+    async function sendCrashReport(type, message, stack = '', extra = {}) {
+      try {
+        const enabled = localStorage.getItem('zp_crash_reports_enabled');
+        if (enabled === 'false') return; // Respektera om användaren stängt av i inställningar
+
+        const payload = {
+          error_type: String(type || 'error'),
+          error_message: String(message || 'Okänt fel').substring(0, 1000),
+          error_stack: String(stack || '').substring(0, 3000),
+          url: window.location.href,
+          user_agent: navigator.userAgent,
+          platform: navigator.platform || 'unknown',
+          screen_size: `${window.innerWidth}x${window.innerHeight}`,
+          app_version: '25.4.0',
+          extra_info: JSON.stringify(extra),
+          created_at: new Date().toISOString()
+        };
+
+        // Spara senaste kraschen lokalt så man kan granska den i Inställningar
+        try {
+          const prev = JSON.parse(localStorage.getItem('zp_local_crash_log') || '[]');
+          prev.unshift(payload);
+          localStorage.setItem('zp_local_crash_log', JSON.stringify(prev.slice(0, 15)));
+        } catch (e) {}
+
+        // 1. Skicka till Supabase-tabellen "crash_reports"
+        if (supabaseClient) {
+          await supabaseClient.from('crash_reports').insert(payload);
+        }
+
+        // 2. Skicka till valfri Webhook om angiven
+        if (CRASH_WEBHOOK_URL) {
+          fetch(CRASH_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Kunde ej skicka kraschrapport:', err);
+      }
+    }
+
+    window.onerror = function (message, source, lineno, colno, error) {
+      sendCrashReport(
+        'window.onerror',
+        `${message} (${source}:${lineno}:${colno})`,
+        error && error.stack ? error.stack : ''
+      );
+      return false;
+    };
+
+    window.addEventListener('unhandledrejection', function (event) {
+      const reason = event.reason;
+      const msg = reason instanceof Error ? reason.message : String(reason);
+      const stack = reason instanceof Error && reason.stack ? reason.stack : '';
+      sendCrashReport('unhandledrejection', msg, stack);
+    });
 
     // --- DEMODATA INNAN SPELLISTA LADDAS ---
     const INITIAL_CHANNELS = [
@@ -207,7 +291,7 @@
     const YEAR_CARDS = ['2026', '2025', '2024', '2023', '2022', '2021', '2020'];
 
     // --- INDEXEDDB FÖR LOKAL LAGRING AV STORA M3U-LISTOR ---
-    const DB_NAME = 'ZappaPortalenCacheDB_v2';
+    const DB_NAME = 'ZappaPortalenCacheDB_v3';
     const DB_STORE = 'UserMediaCache';
 
     function openLocalDB() {
@@ -273,7 +357,6 @@
       const season = seMatch ? parseInt(seMatch[2], 10) : null;
       const episode = seMatch ? parseInt(seMatch[3], 10) : null;
 
-      // Extrahera uppladdningstid om M3U-listan har t.ex. added="1730000000" eller tvg-rec="..."
       let addedTimestamp = 0;
       const addedAttr = rawExtInf.match(/(?:added|date|created|timestamp)="([^"]+)"/i);
       if (addedAttr && addedAttr[1]) {
@@ -321,21 +404,39 @@
       return d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
     }
 
+    // --- ROBUST XMLTV-PARSER (STÖDJER BÅDE DISPLAY-NAME OCH CHANNEL-ID) ---
     function parseXMLTV(xmlText) {
+      if (!xmlText || typeof xmlText !== 'string') return {};
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-      const programmes = xmlDoc.getElementsByTagName('programme');
       const epgMap = {};
+
+      // Mappa även kanal-elementens display-name -> channel id så fler kanaler matchar
+      const channelEls = xmlDoc.getElementsByTagName('channel');
+      const idAliases = {};
+      for (let i = 0; i < channelEls.length; i++) {
+        const chEl = channelEls[i];
+        const idAttr = (chEl.getAttribute('id') || '').toLowerCase().trim();
+        if (!idAttr) continue;
+        const dispEls = chEl.getElementsByTagName('display-name');
+        for (let j = 0; j < dispEls.length; j++) {
+          const dispName = (dispEls[j].textContent || '').toLowerCase().trim();
+          if (dispName) idAliases[dispName] = idAttr;
+        }
+      }
+
+      const programmes = xmlDoc.getElementsByTagName('programme');
       const now = new Date();
-      const maxFuture = new Date(now.getTime() + 18 * 60 * 60 * 1000);
+      const minPast = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      const maxFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
       for (let i = 0; i < programmes.length; i++) {
         const prog = programmes[i];
-        const channelId = (prog.getAttribute('channel') || '').toLowerCase();
+        const channelId = (prog.getAttribute('channel') || '').toLowerCase().trim();
         if (!channelId) continue;
 
         const stopDate = parseXmltvDate(prog.getAttribute('stop'));
-        if (stopDate && stopDate < now) continue;
+        if (stopDate && stopDate < minPast) continue;
 
         const startDate = parseXmltvDate(prog.getAttribute('start'));
         if (startDate && startDate > maxFuture) continue;
@@ -352,6 +453,13 @@
 
       Object.keys(epgMap).forEach((chId) => {
         epgMap[chId].sort((a, b) => a.start - b.start);
+      });
+
+      // Kopiera över alias så kanaler som bara matchar på display-name också hittar sin EPG
+      Object.entries(idAliases).forEach(([aliasName, targetId]) => {
+        if (epgMap[targetId] && !epgMap[aliasName]) {
+          epgMap[aliasName] = epgMap[targetId];
+        }
       });
 
       return epgMap;
@@ -434,7 +542,6 @@
 
           const meta = extractMetadata(currentName, currentGroup, currentRawExtInf);
 
-          // Exakt kontroll: Är det en videofil (mp4/mkv/avi/mov/webm) eller /movie/ /series/ i URL:en?
           const hasVideoFileExtension = /\.(mp4|mkv|avi|mov|webm|m4v|flv)(\?.*)?$/i.test(lowerUrl);
           const isSeriesUrlOrPattern =
             lowerUrl.includes('/series/') ||
@@ -447,7 +554,6 @@
               lowerUrl.includes('/movies/') ||
               (hasVideoFileExtension && !lowerUrl.endsWith('.ts') && !lowerUrl.includes('.m3u8')));
 
-          // Är det en VOD-kanal / 24/7-kanal / Filmkanal (ström som spelas live men ligger i VOD/24-7/Bio-grupp)?
           const isVodChannelPattern =
             !isSeriesUrlOrPattern &&
             !isMovieFileOrUrl &&
@@ -463,15 +569,10 @@
               lowerName.includes('vod:'));
 
           let itemType = 'live';
-          if (isSeriesUrlOrPattern) {
-            itemType = 'series';
-          } else if (isMovieFileOrUrl) {
-            itemType = 'movies';
-          } else if (isVodChannelPattern) {
-            itemType = 'vod_channel';
-          }
+          if (isSeriesUrlOrPattern) itemType = 'series';
+          else if (isMovieFileOrUrl) itemType = 'movies';
+          else if (isVodChannelPattern) itemType = 'vod_channel';
 
-          // Beräkna exakt sorteringspoäng för "Nyligen tillagda" (Högst = Nyast uppladdad i spellistan)
           const addedScore = meta.addedTimestamp > 0 ? meta.addedTimestamp : orderCounter;
 
           const item = {
@@ -507,7 +608,40 @@
       return { live, vodChannels, movies, series, detectedEpgUrl };
     }
 
-    // --- PROFFSIG BILDKOMPONENT UTAN ÖVERDRIVEN ZOOM / KAPADE KANTER ---
+    // --- GOOGLE ADSENSE BANNER KOMPONENT (FÖR GRATIS-VERSIONEN) ---
+    function GoogleAdBanner({ position = 'bottom' }) {
+      useEffect(() => {
+        try {
+          if (window.adsbygoogle) {
+            (window.adsbygoogle = window.adsbygoogle || []).push({});
+          }
+        } catch (e) {}
+      }, []);
+
+      return (
+        <div className={`mx-4 sm:mx-8 my-3 rounded-2xl bg-[#0D0E11] border border-white/10 p-3 flex flex-col items-center justify-center relative overflow-hidden ${position === 'top' ? 'mt-2' : ''}`}>
+          <div className="flex items-center justify-between w-full max-w-4xl mb-1 px-1">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Sponsrad Annons • Zappaportalen Gratisversion</span>
+            <span className="text-[9px] text-[#F3D078]/80 font-semibold">Byt till Royal för reklamfritt</span>
+          </div>
+          <div className="w-full max-w-4xl min-h-[60px] bg-black/60 rounded-xl border border-white/5 flex items-center justify-center px-4 py-2 text-center">
+            <ins
+              className="adsbygoogle"
+              style={{ display: 'block', width: '100%', minHeight: '50px' }}
+              data-ad-client={GOOGLE_ADSENSE_CLIENT}
+              data-ad-slot={GOOGLE_ADSENSE_SLOT}
+              data-ad-format="auto"
+              data-full-width-responsive="true"
+            />
+            <span className="text-xs text-zinc-500 pointer-events-none select-none">
+              Google AdSense Annonsplats (Aktiveras automatiskt på zappaportalen.se)
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // --- PROFFSIG BILDKOMPONENT UTAN ÖVERDRIVEN ZOOM ---
     function SmartMediaImage({ src, alt, fallbackIcon = '🎬', mode = 'poster' }) {
       const [imgErr, setImgErr] = useState(false);
 
@@ -521,14 +655,12 @@
 
       return (
         <div className="absolute inset-0 w-full h-full overflow-hidden bg-[#0A0B0E] flex items-center justify-center">
-          {/* Subtil oskärpt bakgrund så att det aldrig blir fula svarta kanter runt bilden */}
           <img
             src={src}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 w-full h-full object-cover blur-xl opacity-35 scale-110 pointer-events-none"
           />
-          {/* Huvudbilden med måttlig passform så ingenting zoomas sönder eller klipps av */}
           <img
             src={src}
             alt={alt || ''}
@@ -547,7 +679,7 @@
     }
 
     // --- KOMPONENT: HORISONTELL KARUSELLRAD ---
-    function MediaCarouselRow({ title, subtitle, items, onSelect, onFavClick, onExpand, type = 'poster', favItemIds, watchProgressMap, getChannelEpg }) {
+    function MediaCarouselRow({ title, subtitle, items, onSelect, onFavClick, onQuickRemoveFav, onExpand, type = 'poster', favItemIds, watchProgressMap, getChannelEpg }) {
       const scrollRef = useRef(null);
 
       if (!items || items.length === 0) return null;
@@ -572,7 +704,7 @@
                 onClick={onExpand}
                 className="text-xs sm:text-sm font-bold text-[#F3D078] hover:text-amber-300 transition"
               >
-                Expandera
+                Expandera / Hantera
               </button>
             )}
           </div>
@@ -596,7 +728,7 @@
               className="flex items-stretch gap-3.5 overflow-x-auto no-scrollbar px-4 sm:px-8 py-1 scroll-smooth"
             >
               {items.slice(0, 35).map((item, idx) => {
-                const isFav = favItemIds?.has(item.id);
+                const isFav = favItemIds?.has(item.id) || (item.episodes && item.episodes.some((ep) => favItemIds?.has(ep.id)));
                 const prog = watchProgressMap?.[item.id];
                 const progPct = prog && prog.duration > 0 ? Math.min(98, Math.round((prog.time / prog.duration) * 100)) : 0;
 
@@ -630,8 +762,20 @@
                     <div
                       key={item.id}
                       onClick={() => onSelect(item)}
-                      className="shrink-0 w-60 sm:w-64 rounded-2xl bg-[#111214] border border-white/10 hover:border-[#F3D078] p-4 flex flex-col justify-between cursor-pointer transition group shadow-lg"
+                      className="shrink-0 w-60 sm:w-64 rounded-2xl bg-[#111214] border border-white/10 hover:border-[#F3D078] p-4 flex flex-col justify-between cursor-pointer transition group shadow-lg relative"
                     >
+                      {onQuickRemoveFav && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQuickRemoveFav(item);
+                          }}
+                          title="Ta bort från favoriter"
+                          className="absolute top-2.5 right-2.5 z-20 w-7 h-7 rounded-full bg-red-600/90 hover:bg-red-500 text-white flex items-center justify-center text-xs font-bold shadow"
+                        >
+                          ✕
+                        </button>
+                      )}
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center p-1.5 shrink-0">
                           {item.logo ? (
@@ -640,7 +784,7 @@
                             <span className="text-xs font-bold text-[#F3D078]">TV</span>
                           )}
                         </div>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 pr-5">
                           <h3 className="text-xs sm:text-sm font-bold text-white truncate">{item.name}</h3>
                           <div className="flex items-center gap-1.5 mt-1">
                             {item.quality && (
@@ -729,28 +873,44 @@
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent opacity-95 z-10" />
 
-                    {onFavClick && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onFavClick(item);
-                        }}
-                        className={`absolute top-2 right-2 z-20 w-7 h-7 rounded-full flex items-center justify-center text-xs transition ${
-                          isFav
-                            ? 'bg-[#F3D078] text-black shadow font-black'
-                            : 'bg-black/60 text-zinc-300 opacity-0 group-hover:opacity-100 hover:bg-black'
-                        }`}
-                      >
-                        ★
-                      </button>
-                    )}
+                    {/* Snabbknappar uppe i hörnet: Stjärna + Snabb-radera om i favoritrad */}
+                    <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
+                      {onQuickRemoveFav && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQuickRemoveFav(item);
+                          }}
+                          title="Ta bort från favoriter direkt"
+                          className="w-7 h-7 rounded-full bg-red-600/90 hover:bg-red-500 text-white flex items-center justify-center text-xs font-bold shadow"
+                        >
+                          🗑
+                        </button>
+                      )}
+                      {onFavClick && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onFavClick(item);
+                          }}
+                          title="Lägg till / ändra favoritmapp"
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs transition ${
+                            isFav
+                              ? 'bg-[#F3D078] text-black shadow font-black'
+                              : 'bg-black/60 text-zinc-300 opacity-0 group-hover:opacity-100 hover:bg-black'
+                          }`}
+                        >
+                          ★
+                        </button>
+                      )}
+                    </div>
 
                     <div className="relative z-20 p-2.5 flex flex-col items-center text-center w-full">
                       <h3 className="text-[11px] font-bold text-white line-clamp-2 leading-tight mb-1.5 drop-shadow">
                         {item.seriesTitle || item.name}
                       </h3>
                       <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-[#F3D078] text-black shadow">
-                        {item.episodeCount ? `${item.episodeCount} AVSNITT` : item.type === 'series' ? 'SERIE' : 'FILM'}
+                        {item.episodeCount ? `${item.episodeCount} AVSNITT` : item.type === 'series' ? 'SERIE' : item.type === 'live' ? 'LIVE' : 'FILM'}
                       </span>
                     </div>
                   </div>
@@ -764,6 +924,13 @@
 
     // --- HUVUDAPPLIKATION ---
     function App() {
+      // Tillåt växling av APP_EDITION ('free' vs 'premium') för test & produktion
+      const [appEdition, setAppEdition] = useState(() => {
+        try { return localStorage.getItem('zp_app_edition') || DEFAULT_APP_EDITION; } catch (e) { return DEFAULT_APP_EDITION; }
+      });
+      const [isSubscriber, setIsSubscriber] = useState(true); // Styrd av Supabase user_settings i 'premium'-läge
+      const [paywallModal, setPaywallModal] = useState(false);
+
       const [user, setUser] = useState(null);
       const [isSignUp, setIsSignUp] = useState(false);
       const [authModal, setAuthModal] = useState(true);
@@ -771,7 +938,7 @@
       const emailInputRef = useRef(null);
       const passwordInputRef = useRef(null);
 
-      // Separerade medielistor: Live-kanaler, VOD-kanaler, Filmer (on-demand) och Serier
+      // Medielistor
       const [channels, setChannels] = useState(INITIAL_CHANNELS);
       const [vodChannels, setVodChannels] = useState([]);
       const [movies, setMovies] = useState([]);
@@ -781,15 +948,22 @@
       const [watchHistory, setWatchHistory] = useState([]);
       const [watchProgress, setWatchProgress] = useState({});
 
+      // EPG & Mappväljare i TV-guide (Punkt 4 & 5)
       const [epgData, setEpgData] = useState({});
-      const [epgUrl, setEpgUrl] = useState('');
+      const [epgUrl, setEpgUrl] = useState(() => {
+        try { return localStorage.getItem('zp_saved_epg_url') || ''; } catch (e) { return ''; }
+      });
       const [epgStatus, setEpgStatus] = useState('');
+      const [isEpgLoading, setIsEpgLoading] = useState(false);
       const [epgSearch, setEpgSearch] = useState('');
+      const [epgSelectedFolder, setEpgSelectedFolder] = useState('ALL'); // 'ALL', 'ALL_FAV', 'FAV:id', 'GRP:name'
 
+      // Navigering
       const [activeTab, setActiveTab] = useState('home');
       const [currentMedia, setCurrentMedia] = useState(null);
       const [isFullscreenPlayer, setIsFullscreenPlayer] = useState(false);
 
+      // Filter & Kategorier
       const [expandedCategory, setExpandedCategory] = useState(null);
       const [selectedLiveGroup, setSelectedLiveGroup] = useState('ALL');
       const [selectedVodChGroup, setSelectedVodChGroup] = useState('ALL');
@@ -797,31 +971,63 @@
       const [globalSearch, setGlobalSearch] = useState('');
       const [renderLimit, setRenderLimit] = useState(80);
 
+      // Serie-detaljvy
       const [detailItem, setDetailItem] = useState(null);
       const [selectedSeason, setSelectedSeason] = useState(1);
 
+      // Spelare & Utseende
       const [playerEngine, setPlayerEngine] = useState('auto');
       const [tvMode, setTvMode] = useState(false);
       const [accentTheme, setAccentTheme] = useState('aik');
       const [copyFeedback, setCopyFeedback] = useState(false);
+      const [externalPlayerNotice, setExternalPlayerNotice] = useState('');
       const [quickDrawer, setQuickDrawer] = useState(false);
 
+      // Favorit-hantering & Flervalsborttagning (Punkt 7)
       const [favModalItem, setFavModalItem] = useState(null);
       const [manageFavModal, setManageFavModal] = useState(false);
       const [newListName, setNewListName] = useState('');
       const [newListGroup, setNewListGroup] = useState('ALL');
       const [newListFilter, setNewListFilter] = useState('');
+      const [editingFavListId, setEditingFavListId] = useState(null);
+      const [selectedFavIdsForRemoval, setSelectedFavIdsForRemoval] = useState(new Set());
 
-      const [savedM3uUrl, setSavedM3uUrl] = useState('');
-      const [m3uUrl, setM3uUrl] = useState('');
+      // Källor, Synk mellan Dator & Mobil (Punkt 6)
+      const [savedM3uUrl, setSavedM3uUrl] = useState(() => {
+        try { return localStorage.getItem('zp_saved_m3u_url') || ''; } catch (e) { return ''; }
+      });
+      const [m3uUrl, setM3uUrl] = useState(() => {
+        try { return localStorage.getItem('zp_saved_m3u_url') || ''; } catch (e) { return ''; }
+      });
+      const [isM3uLoading, setIsM3uLoading] = useState(false);
       const [statusMsg, setStatusMsg] = useState('');
+      const [needsDeviceSyncReload, setNeedsDeviceSyncReload] = useState(false);
       const [settingsSubView, setSettingsSubView] = useState(null);
+
+      // Kraschrapport-inställning (Punkt 2)
+      const [crashReportingEnabled, setCrashReportingEnabled] = useState(() => {
+        try { return localStorage.getItem('zp_crash_reports_enabled') !== 'false'; } catch (e) { return true; }
+      });
+      const [crashTestFeedback, setCrashTestFeedback] = useState('');
 
       const videoRef = useRef(null);
       const [videoError, setVideoError] = useState(null);
       const retryCountRef = useRef(0);
 
       const accentColor = accentTheme === 'aik' ? '#F3D078' : '#D4A346';
+
+      // Spara M3U- och EPG-textlänkar i localStorage direkt när användaren skriver in dem (Punkt 6)
+      useEffect(() => {
+        try {
+          if (m3uUrl) localStorage.setItem('zp_saved_m3u_url', m3uUrl);
+        } catch (e) {}
+      }, [m3uUrl]);
+
+      useEffect(() => {
+        try {
+          if (epgUrl) localStorage.setItem('zp_saved_epg_url', epgUrl);
+        } catch (e) {}
+      }, [epgUrl]);
 
       useEffect(() => {
         if (!supabaseClient) return;
@@ -855,9 +1061,16 @@
         };
       }, []);
 
+      // ============================================================================
+      // PUNKT 6: LADDNING AV LOKAL CACHE VS MOLNSYNKADE LÄNKAR (DATOR VS TELEFON)
+      // ============================================================================
       async function loadUserData(userId) {
+        let hasLocalMedia = false;
+
+        // 1. Försök ladda den tunga mediedatan från enhetens egna IndexedDB
         const cachedMedia = await loadLocalCache(`media_${userId}`);
-        if (cachedMedia) {
+        if (cachedMedia && (cachedMedia.channels?.length > 2 || cachedMedia.movies?.length > 0 || cachedMedia.series?.length > 0)) {
+          hasLocalMedia = true;
           if (cachedMedia.channels?.length) setChannels(cachedMedia.channels);
           if (cachedMedia.vodChannels) setVodChannels(cachedMedia.vodChannels);
           if (cachedMedia.movies) setMovies(cachedMedia.movies);
@@ -868,12 +1081,14 @@
           }
           if (cachedMedia.epgUrl) setEpgUrl(cachedMedia.epgUrl);
           setStatusMsg(
-            `Spellista redo: ${cachedMedia.channels?.length || 0} livekanaler, ${cachedMedia.vodChannels?.length || 0} VOD-kanaler, ${cachedMedia.movies?.length || 0} filmer, ${cachedMedia.series?.length || 0} serieavsnitt.`
+            `Spellista redo på denna enhet: ${cachedMedia.channels?.length || 0} livekanaler, ${cachedMedia.vodChannels?.length || 0} VOD-kanaler, ${cachedMedia.movies?.length || 0} filmer, ${cachedMedia.series?.length || 0} serieavsnitt.`
           );
         }
 
         const cachedEpg = await loadLocalCache(`epg_${userId}`);
-        if (cachedEpg) setEpgData(cachedEpg);
+        if (cachedEpg && Object.keys(cachedEpg).length > 0) {
+          setEpgData(cachedEpg);
+        }
 
         const cachedHistory = await loadLocalCache(`history_${userId}`);
         if (cachedHistory) {
@@ -881,6 +1096,7 @@
           if (cachedHistory.watchProgress) setWatchProgress(cachedHistory.watchProgress);
         }
 
+        // 2. Hämta användarens inställningar, favoritmappar och sparade M3U/EPG-länkar från Supabase
         if (!supabaseClient) return;
         try {
           const { data, error } = await supabaseClient
@@ -889,29 +1105,80 @@
             .eq('user_id', userId)
             .maybeSingle();
 
-          if (!error && data && data.fav_lists) {
-            setFavLists(data.fav_lists);
+          if (!error && data) {
+            if (Array.isArray(data.fav_lists) && data.fav_lists.length > 0) {
+              setFavLists(data.fav_lists);
+            } else if (data.fav_lists && typeof data.fav_lists === 'object') {
+              // Stöd för inbäddad metadata i fav_lists om kolumner saknas i Supabase
+              if (Array.isArray(data.fav_lists.lists)) setFavLists(data.fav_lists.lists);
+              if (data.fav_lists.m3uUrl && !m3uUrl) {
+                setM3uUrl(data.fav_lists.m3uUrl);
+                setSavedM3uUrl(data.fav_lists.m3uUrl);
+              }
+              if (data.fav_lists.epgUrl && !epgUrl) {
+                setEpgUrl(data.fav_lists.epgUrl);
+              }
+            }
+
+            if (data.m3u_url) {
+              setM3uUrl(data.m3u_url);
+              setSavedM3uUrl(data.m3u_url);
+              try { localStorage.setItem('zp_saved_m3u_url', data.m3u_url); } catch (e) {}
+            }
+            if (data.epg_url) {
+              setEpgUrl(data.epg_url);
+              try { localStorage.setItem('zp_saved_epg_url', data.epg_url); } catch (e) {}
+            }
+
+            // Prenumerationskontroll för 'premium'-versionen (Punkt 8)
+            if (typeof data.is_subscriber === 'boolean') {
+              setIsSubscriber(data.is_subscriber);
+            }
+
+            // Om användaren öppnar på en ny enhet (t.ex. mobilen) där länkarna finns sparade men mediedatan inte är inläst ännu:
+            const cloudM3u = data.m3u_url || localStorage.getItem('zp_saved_m3u_url') || '';
+            const cloudEpg = data.epg_url || localStorage.getItem('zp_saved_epg_url') || '';
+            if (!hasLocalMedia && (cloudM3u || cloudEpg)) {
+              setNeedsDeviceSyncReload(true);
+            }
           }
         } catch (err) {
           console.error('Molnfel:', err);
         }
       }
 
-      async function saveToCloud(lists) {
+      async function saveToCloud(lists, customM3u = m3uUrl, customEpg = epgUrl) {
         if (!supabaseClient || !user) return;
         try {
-          await supabaseClient.from('user_settings').upsert({
+          // Försök spara både fav_lists och textlänkarna m3u_url / epg_url
+          const { error } = await supabaseClient.from('user_settings').upsert({
             user_id: user.id,
             fav_lists: lists,
-            updated_at: new Date()
+            m3u_url: customM3u || savedM3uUrl || '',
+            epg_url: customEpg || epgUrl || '',
+            updated_at: new Date().toISOString()
           }, { onConflict: 'user_id' });
+
+          // Fallback om m3u_url/epg_url-kolumnerna inte finns i Supabase-tabellen ännu
+          if (error) {
+            await supabaseClient.from('user_settings').upsert({
+              user_id: user.id,
+              fav_lists: lists,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+          }
         } catch (err) {
           console.error('Kunde ej synka till molnet:', err);
         }
       }
 
+      // Kontrollera betalvägg innan uppspelning om appEdition === 'premium' och !isSubscriber
       const startPlayback = (item, openFull = true) => {
         if (!item) return;
+        if (appEdition === 'premium' && !isSubscriber) {
+          setPaywallModal(true);
+          return;
+        }
         setCurrentMedia(item);
         if (openFull) setIsFullscreenPlayer(true);
         setDetailItem(null);
@@ -1006,14 +1273,14 @@
                     try { mpegtsPlayer.unload(); mpegtsPlayer.load(); mpegtsPlayer.play().catch(() => {}); } catch (e) {}
                   }, 1200);
                 } else {
-                  setVideoError('Det är ett problem med streamingen av denna kanal (CORS eller offline). Öppna i VLC eller byt motor nedan.');
+                  setVideoError('Webbläsaren blockerar strömmen (CORS/HTTP-spärr). Klicka på "Öppna i VLC" eller "Ladda ner .m3u" nedan för att spela direkt!');
                 }
               });
             } catch (err) {
-              setVideoError('Det är ett problem med streamingen av denna kanal.');
+              setVideoError('Det är ett problem med streamingen i webbläsaren. Öppna i VLC nedan.');
             }
           } else {
-            setVideoError('MPEG-TS stöds ej på denna enhet. Öppna i VLC.');
+            setVideoError('MPEG-TS stöds ej i denna webbläsare. Klicka på "Öppna i VLC" nedan.');
           }
         };
 
@@ -1035,7 +1302,7 @@
                   hls.destroy();
                   hls = null;
                   if (allowFallbackToTs) startMpegTs();
-                  else setVideoError('Det är ett problem med streamingen av denna kanal.');
+                  else setVideoError('Webbläsaren kan inte spela strömmen direkt (CORS/Codec). Klicka på "Öppna i VLC" nedan.');
                 }
               }
             });
@@ -1043,7 +1310,7 @@
             video.src = mediaUrl;
             video.addEventListener('loadedmetadata', applySavedTime, { once: true });
             video.play().catch(() => {
-              setVideoError('Det är ett problem med streamingen av denna kanal.');
+              setVideoError('Kunde ej starta uppspelning i webbläsaren. Klicka på "Öppna i VLC" nedan.');
             });
           }
         };
@@ -1101,7 +1368,7 @@
         return { currentProg, nextProg, progress };
       };
 
-      // --- GRUPPERING AV SERIER + KORREKT "SENAST UPPLADDAD"-TID ---
+      // --- GRUPPERING AV SERIER + SENASTE UPPLADDADE AVSNITT ---
       const groupedSeriesCatalog = useMemo(() => {
         const showMap = {};
         const shows = [];
@@ -1122,7 +1389,6 @@
           }
           showMap[showKey].episodes.push(ep);
           showMap[showKey].episodeCount += 1;
-          // Uppdatera seriens uppladdningstid till det allra senaste avsnittets tidpunkt!
           if ((ep.addedOrder || 0) > showMap[showKey].latestAddedOrder) {
             showMap[showKey].latestAddedOrder = ep.addedOrder;
           }
@@ -1130,7 +1396,6 @@
         return shows;
       }, [series]);
 
-      // --- SORTERADE LISTOR FÖR "NYLIGEN TILLAGDA" (SENASTE FÖRST!) ---
       const recentlyAddedMovies = useMemo(() => {
         return [...movies].sort((a, b) => (b.addedOrder || 0) - (a.addedOrder || 0));
       }, [movies]);
@@ -1147,8 +1412,9 @@
         return Array.from(set);
       }, [channels, vodChannels, movies, series]);
 
+      // Inkludera även groupedSeriesCatalog så att en sparad serie (`show_...`) hittas direkt i favoritmappar!
       const favItemsById = useMemo(() => {
-        const allItems = [...channels, ...vodChannels, ...movies, ...series];
+        const allItems = [...channels, ...vodChannels, ...movies, ...groupedSeriesCatalog, ...series];
         const map = {};
         favLists.forEach((favList) => {
           const manualSet = new Set(favList.channelIds || []);
@@ -1156,19 +1422,30 @@
           const fg = (favList.filterGroup || '').toLowerCase();
           const term = (favList.filter || '').toLowerCase().trim();
 
+          const seenInFolder = new Set();
           map[favList.id] = allItems.filter((item) => {
-            if (manualSet.has(item.id)) return true;
+            if (seenInFolder.has(item.id)) return false;
+            if (manualSet.has(item.id)) {
+              seenInFolder.add(item.id);
+              return true;
+            }
             if (!hasFilter) return false;
+            // För auto-regler, undvik att lägga in alla enskilda serieavsnitt om serie-kortet redan finns
+            if (item.type === 'series' && !item.isSeriesShow) return false;
 
             const itemGrp = (item.group || '').toLowerCase();
             const groupMatches = !fg || fg === 'all' || itemGrp === fg || itemGrp.includes(fg);
             const termMatches = !term || item.name.toLowerCase().includes(term);
 
-            return groupMatches && termMatches;
+            if (groupMatches && termMatches) {
+              seenInFolder.add(item.id);
+              return true;
+            }
+            return false;
           });
         });
         return map;
-      }, [favLists, channels, vodChannels, movies, series]);
+      }, [favLists, channels, vodChannels, movies, groupedSeriesCatalog, series]);
 
       const allFavoritedIds = useMemo(() => {
         const set = new Set();
@@ -1189,6 +1466,44 @@
         });
         return result;
       }, [favItemsById]);
+
+      // ============================================================================
+      // PUNKT 1: FILTRERING AV FAVORITER PER FLIK (FILMER VS SERIER VS LIVE)
+      // ============================================================================
+      const movieFavoritesOnly = useMemo(() => {
+        return allFavoriteItemsCombined.filter((it) => it.type === 'movies');
+      }, [allFavoriteItemsCombined]);
+
+      const seriesFavoritesOnly = useMemo(() => {
+        const seenShows = new Set();
+        const res = [];
+        // 1. Kolla serier i allFavoriteItemsCombined
+        allFavoriteItemsCombined.forEach((it) => {
+          if (it.type === 'series') {
+            if (it.isSeriesShow) {
+              if (!seenShows.has(it.id)) {
+                seenShows.add(it.id);
+                res.push(it);
+              }
+            } else {
+              // Om användaren har favoritmarkerat ett enskilt avsnitt, hitta serie-kortet
+              const parentShow = groupedSeriesCatalog.find(
+                (sh) => sh.name.toLowerCase() === (it.seriesTitle || it.name).toLowerCase() || sh.episodes?.some((e) => e.id === it.id)
+              );
+              const target = parentShow || it;
+              if (!seenShows.has(target.id)) {
+                seenShows.add(target.id);
+                res.push(target);
+              }
+            }
+          }
+        });
+        return res;
+      }, [allFavoriteItemsCombined, groupedSeriesCatalog]);
+
+      const liveFavoritesOnly = useMemo(() => {
+        return allFavoriteItemsCombined.filter((it) => it.type === 'live' || it.type === 'vod_channel');
+      }, [allFavoriteItemsCombined]);
 
       const movieGroups = useMemo(() => {
         const map = {};
@@ -1271,6 +1586,40 @@
         });
       };
 
+      // ============================================================================
+      // PUNKT 7: ENKEL BORTTAGNING AV 1 ELLER FLERA FAVORITER SAMTIDIGT
+      // ============================================================================
+      const quickRemoveSingleFavorite = (item) => {
+        if (!item) return;
+        const idsToRemove = new Set([item.id]);
+        if (item.episodes) item.episodes.forEach((ep) => idsToRemove.add(ep.id));
+
+        setFavLists((prev) => {
+          const updated = prev.map((list) => ({
+            ...list,
+            channelIds: (list.channelIds || []).filter((id) => !idsToRemove.has(id))
+          }));
+          saveToCloud(updated);
+          return updated;
+        });
+      };
+
+      const removeSelectedFavoritesBatch = (targetListId = 'ALL') => {
+        if (selectedFavIdsForRemoval.size === 0) return;
+        setFavLists((prev) => {
+          const updated = prev.map((list) => {
+            if (targetListId !== 'ALL' && list.id !== targetListId) return list;
+            return {
+              ...list,
+              channelIds: (list.channelIds || []).filter((id) => !selectedFavIdsForRemoval.has(id))
+            };
+          });
+          saveToCloud(updated);
+          return updated;
+        });
+        setSelectedFavIdsForRemoval(new Set());
+      };
+
       const handleCreateFavList = (e) => {
         e.preventDefault();
         if (!newListName.trim()) return;
@@ -1322,78 +1671,186 @@
         setAuthModal(true);
       };
 
-      const openInExternalPlayer = (scheme, item = currentMedia) => {
-        const url = item?.url;
-        if (!url) return;
-        if (scheme === 'vlc') window.location.href = `vlc://${url}`;
-        else if (scheme === 'potplayer') window.location.href = `potplayer://${url}`;
-        else if (scheme === 'iina') window.location.href = `iina://weblink?url=${encodeURIComponent(url)}`;
-      };
-
+      // ============================================================================
+      // PUNKT 3: FELSÖKT & FIXAD EXTERN SPELARE (VLC, POTPLAYER, IINA) & URKLIPP
+      // ============================================================================
       const downloadSingleM3U = (item = currentMedia) => {
         if (!item?.url) return;
-        const m3uContent = `#EXTM3U\n#EXTINF:-1 tvg-logo="${item.logo || ''}" group-title="${item.group || ''}",${item.name}\n${item.url}`;
+        const cleanUrl = item.url.trim();
+        const m3uContent = `#EXTM3U\n#EXTINF:-1 tvg-logo="${item.logo || ''}" group-title="${item.group || ''}",${item.name}\n${cleanUrl}\n`;
         const blob = new Blob([m3uContent], { type: 'audio/x-mpegurl' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `${item.name.replace(/[^a-z0-9]/gi, '_')}.m3u`;
+        link.download = `${(item.name || 'stream').replace(/[^a-z0-9]/gi, '_')}.m3u`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
       };
 
-      const copyStreamUrl = (item = currentMedia) => {
-        if (!item?.url) return;
-        navigator.clipboard.writeText(item.url);
-        setCopyFeedback(true);
-        setTimeout(() => setCopyFeedback(false), 2000);
+      const openInExternalPlayer = (scheme, item = currentMedia) => {
+        const rawUrl = item?.url?.trim();
+        if (!rawUrl) {
+          alert('Ingen strömlänk hittades för denna kanal.');
+          return;
+        }
+
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/.test(navigator.userAgent);
+        let targetUri = '';
+
+        if (scheme === 'vlc') {
+          if (isIOS) {
+            targetUri = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(rawUrl)}`;
+          } else if (isAndroid) {
+            const noProto = rawUrl.replace(/^https?:\/\//i, '');
+            const proto = rawUrl.startsWith('https') ? 'https' : 'http';
+            targetUri = `intent://${noProto}#Intent;scheme=${proto};package=org.videolan.vlc;type=video/*;end`;
+          } else {
+            // På Windows/Mac: vlc://http://...
+            targetUri = `vlc://${rawUrl}`;
+          }
+        } else if (scheme === 'potplayer') {
+          targetUri = `potplayer://${rawUrl}`;
+        } else if (scheme === 'iina') {
+          targetUri = `iina://weblink?url=${encodeURIComponent(rawUrl)}`;
+        }
+
+        setExternalPlayerNotice(`Öppnar ${scheme.toUpperCase()}... (Om inget händer laddas en .m3u-fil ner som du kan dubbelklicka på)`);
+        setTimeout(() => setExternalPlayerNotice(''), 4500);
+
+        // Använd osynlig A-tagg istället för window.location.href så att webbläsaren inte avbryter sidan!
+        try {
+          const a = document.createElement('a');
+          a.href = targetUri;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } catch (err) {
+          downloadSingleM3U(item);
+        }
       };
 
-      const loadEpgFromUrl = async (urlToLoad) => {
-        const target = (urlToLoad || epgUrl).trim();
-        if (!target) return;
-        setEpgStatus('Hämtar TV-tablå (EPG)...');
+      const copyStreamUrl = async (item = currentMedia) => {
+        const textToCopy = item?.url?.trim();
+        if (!textToCopy) return;
         try {
-          let xmlText = '';
-          try {
-            const res = await fetch(target);
-            if (!res.ok) throw new Error();
-            xmlText = await res.text();
-          } catch (e) {
-            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(target);
-            const resP = await fetch(proxy);
-            xmlText = await resP.text();
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(textToCopy);
+          } else {
+            // Fallback för HTTP / lokala enheter
+            const textArea = document.createElement('textarea');
+            textArea.value = textToCopy;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
           }
+          setCopyFeedback(true);
+          setTimeout(() => setCopyFeedback(false), 2500);
+        } catch (err) {
+          prompt('Kopiera strömlänken nedan:', textToCopy);
+        }
+      };
+
+      // ============================================================================
+      // PUNKT 4: FIXAD EPG-HANTERARE MED SPINNER, MULTI-PROXY OCH GZIP (.xml.gz) STÖD
+      // ============================================================================
+      const loadEpgFromUrl = async (urlToLoad) => {
+        const target = (typeof urlToLoad === 'string' ? urlToLoad : epgUrl).trim();
+        if (!target) {
+          setEpgStatus('⚠️ Fyll i en giltig EPG XMLTV-länk först (eller välj en .xml-fil).');
+          return;
+        }
+
+        setIsEpgLoading(true);
+        setEpgStatus('⏳ Hämtar och läser in TV-tablå (EPG)...');
+        try { localStorage.setItem('zp_saved_epg_url', target); } catch (e) {}
+
+        try {
+          let response = null;
+          const urlsToTry = [
+            target,
+            'https://corsproxy.io/?' + encodeURIComponent(target),
+            'https://api.allorigins.win/raw?url=' + encodeURIComponent(target)
+          ];
+
+          for (const candidate of urlsToTry) {
+            try {
+              const res = await fetch(candidate);
+              if (res.ok) {
+                response = res;
+                break;
+              }
+            } catch (innerErr) {}
+          }
+
+          if (!response) {
+            throw new Error('Kunde inte nå EPG-servern via länk.');
+          }
+
+          let xmlText = '';
+          // Om EPG-länken är komprimerad (.gz) och webbläsaren har DecompressionStream
+          if (target.toLowerCase().endsWith('.gz') && window.DecompressionStream) {
+            try {
+              const ds = new DecompressionStream('gzip');
+              const decompressedStream = response.body.pipeThrough(ds);
+              xmlText = await new Response(decompressedStream).text();
+            } catch (gzErr) {
+              xmlText = await response.text();
+            }
+          } else {
+            xmlText = await response.text();
+          }
+
           const parsedEpg = parseXMLTV(xmlText);
           const count = Object.keys(parsedEpg).length;
           if (count > 0) {
             setEpgData(parsedEpg);
             if (user) await saveLocalCache(`epg_${user.id}`, parsedEpg);
-            setEpgStatus(`EPG klar! Laddade tablå för ${count} kanaler.`);
+            saveToCloud(favLists, m3uUrl || savedM3uUrl, target);
+            setEpgStatus(`✅ EPG synkad! Laddade programtablå för ${count} kanaler.`);
           } else {
-            setEpgStatus('Inga program hittades i EPG-länken.');
+            setEpgStatus('⚠️ EPG-filen lästes in men innehöll inga aktuella program för idag.');
           }
         } catch (err) {
-          setEpgStatus('Kunde ej hämta EPG via länk. Ladda upp XML-filen istället.');
+          setEpgStatus('❌ Kunde ej hämta EPG via länk (CORS-spärr hos leverantören). Ladda ner .xml-filen och välj den i steg 3 ovan!');
+        } finally {
+          setIsEpgLoading(false);
         }
       };
 
       const handleEpgFileUpload = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        setEpgStatus('Läser in XMLTV-fil...');
+        setIsEpgLoading(true);
+        setEpgStatus(`⏳ Läser in EPG-filen "${file.name}"...`);
+
         setTimeout(() => {
           const reader = new FileReader();
           reader.onload = async (ev) => {
-            const parsedEpg = parseXMLTV(ev.target.result);
-            const count = Object.keys(parsedEpg).length;
-            if (count > 0) {
-              setEpgData(parsedEpg);
-              if (user) await saveLocalCache(`epg_${user.id}`, parsedEpg);
-              setEpgStatus(`EPG klar! Tablå laddad för ${count} kanaler.`);
-            } else {
-              setEpgStatus('Inga program hittades.');
+            try {
+              const parsedEpg = parseXMLTV(ev.target.result);
+              const count = Object.keys(parsedEpg).length;
+              if (count > 0) {
+                setEpgData(parsedEpg);
+                if (user) await saveLocalCache(`epg_${user.id}`, parsedEpg);
+                setEpgStatus(`✅ EPG klar! Tablå laddad för ${count} kanaler.`);
+              } else {
+                setEpgStatus('⚠️ Inga aktuella program hittades i XML-filen.');
+              }
+            } catch (err) {
+              setEpgStatus('❌ Kunde ej tolka XML-filen.');
+            } finally {
+              setIsEpgLoading(false);
             }
+          };
+          reader.onerror = () => {
+            setEpgStatus('❌ Fel vid läsning av fil.');
+            setIsEpgLoading(false);
           };
           reader.readAsText(file);
         }, 50);
@@ -1409,6 +1866,10 @@
         setVodChannels(newVodChannels);
         setMovies(newMovies);
         setSeries(newSeries);
+        setNeedsDeviceSyncReload(false);
+
+        const finalM3u = sourceM3uUrl || m3uUrl || savedM3uUrl;
+        const finalEpg = parsed.detectedEpgUrl || epgUrl;
 
         if (user) {
           await saveLocalCache(`media_${user.id}`, {
@@ -1416,17 +1877,17 @@
             vodChannels: newVodChannels,
             movies: newMovies,
             series: newSeries,
-            m3uUrl: sourceM3uUrl || savedM3uUrl,
-            epgUrl: parsed.detectedEpgUrl || epgUrl
+            m3uUrl: finalM3u,
+            epgUrl: finalEpg
           });
         }
 
-        saveToCloud(favLists);
+        saveToCloud(favLists, finalM3u, finalEpg);
         setStatusMsg(
-          `Klar! Sparade ${newLive.length} livekanaler, ${newVodChannels.length} VOD-kanaler, ${newMovies.length} filmer och ${newSeries.length} serieavsnitt.`
+          `✅ Klar! Sparade ${newLive.length} livekanaler, ${newVodChannels.length} VOD-kanaler, ${newMovies.length} filmer och ${newSeries.length} serieavsnitt.`
         );
 
-        if (parsed.detectedEpgUrl) {
+        if (parsed.detectedEpgUrl && !epgUrl) {
           setEpgUrl(parsed.detectedEpgUrl);
           loadEpgFromUrl(parsed.detectedEpgUrl);
         }
@@ -1436,12 +1897,17 @@
         if (!user) return;
         const file = e.target.files?.[0];
         if (!file) return;
-        setStatusMsg('Läser in och separerar Live, VOD-kanaler, Filmer & Serier...');
+        setIsM3uLoading(true);
+        setStatusMsg(`⏳ Läser in och sorterar "${file.name}"...`);
         setTimeout(() => {
           const reader = new FileReader();
-          reader.onload = (ev) => {
-            const parsed = parseM3U(ev.target.result);
-            applyParsedData(parsed);
+          reader.onload = async (ev) => {
+            try {
+              const parsed = parseM3U(ev.target.result);
+              await applyParsedData(parsed);
+            } finally {
+              setIsM3uLoading(false);
+            }
           };
           reader.readAsText(file);
         }, 50);
@@ -1450,26 +1916,55 @@
       const handleLoadM3uUrl = async (e) => {
         if (e) e.preventDefault();
         if (!user) return;
-        const urlToFetch = m3uUrl.trim() || savedM3uUrl;
-        if (!urlToFetch) return;
+        const urlToFetch = (m3uUrl || savedM3uUrl).trim();
+        if (!urlToFetch) {
+          setStatusMsg('⚠️ Ange en M3U-länk i textfältet först.');
+          return;
+        }
 
-        setStatusMsg('Hämtar spellista...');
+        setIsM3uLoading(true);
+        setStatusMsg('⏳ Hämtar spellista från länk...');
+        try { localStorage.setItem('zp_saved_m3u_url', urlToFetch); } catch (e) {}
+
         try {
           let text = '';
-          try {
-            const res = await fetch(urlToFetch);
-            if (!res.ok) throw new Error();
-            text = await res.text();
-          } catch (directErr) {
-            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(urlToFetch);
-            const resProxy = await fetch(proxyUrl);
-            text = await resProxy.text();
+          const candidates = [
+            urlToFetch,
+            'https://corsproxy.io/?' + encodeURIComponent(urlToFetch),
+            'https://api.allorigins.win/raw?url=' + encodeURIComponent(urlToFetch)
+          ];
+
+          for (const urlCandidate of candidates) {
+            try {
+              const res = await fetch(urlCandidate);
+              if (res.ok) {
+                const body = await res.text();
+                if (body && body.includes('#EXT')) {
+                  text = body;
+                  break;
+                }
+              }
+            } catch (inner) {}
           }
+
+          if (!text) throw new Error('Kunde ej hämta M3U');
+
           const parsed = parseM3U(text);
           setSavedM3uUrl(urlToFetch);
-          applyParsedData(parsed, urlToFetch);
+          await applyParsedData(parsed, urlToFetch);
         } catch (err) {
-          setStatusMsg('CORS-spärr på länk. Ladda upp M3U-filen direkt istället!');
+          setStatusMsg('❌ CORS-spärr på M3U-länken i webbläsaren. Ladda upp M3U-filen direkt i steg 1 ovan!');
+        } finally {
+          setIsM3uLoading(false);
+        }
+      };
+
+      const handleSyncReloadOnThisDevice = async () => {
+        if (m3uUrl || savedM3uUrl) {
+          await handleLoadM3uUrl();
+        }
+        if (epgUrl) {
+          await loadEpgFromUrl(epgUrl);
         }
       };
 
@@ -1485,7 +1980,7 @@
         setWatchHistory([]);
         setWatchProgress({});
         setEpgData({});
-        setStatusMsg('All lokal cache och historik har rensats.');
+        setStatusMsg('✅ Lokal mediedata har rensats (dina M3U- och EPG-länkar ligger kvar).');
       };
 
       const openGenreFilter = (genreObj) => {
@@ -1515,10 +2010,30 @@
 
       const activeChannelEpg = useMemo(() => getChannelEpg(currentMedia), [currentMedia, epgData]);
 
+      // ============================================================================
+      // PUNKT 5: FILTRERADE KANALER FÖR TV-GUIDENS MAPPVÄLJARE
+      // ============================================================================
+      const epgFilteredChannels = useMemo(() => {
+        let baseList = channels;
+        if (epgSelectedFolder === 'ALL_FAV') {
+          baseList = liveFavoritesOnly;
+        } else if (epgSelectedFolder.startsWith('FAV:')) {
+          const favId = epgSelectedFolder.replace('FAV:', '');
+          baseList = (favItemsById[favId] || []).filter((x) => x.type === 'live' || x.type === 'vod_channel');
+        } else if (epgSelectedFolder.startsWith('GRP:')) {
+          const grpName = epgSelectedFolder.replace('GRP:', '');
+          baseList = liveGroups[grpName] || [];
+        }
+
+        if (!epgSearch.trim()) return baseList;
+        const q = epgSearch.toLowerCase().trim();
+        return baseList.filter((ch) => ch.name.toLowerCase().includes(q) || (ch.group && ch.group.toLowerCase().includes(q)));
+      }, [channels, epgSelectedFolder, liveFavoritesOnly, favItemsById, liveGroups, epgSearch]);
+
       return (
         <div className={`w-full h-screen bg-black flex flex-col overflow-hidden text-white relative ${tvMode ? 'text-lg' : ''}`}>
           
-          {/* TOPP-NAVIGERING (MED SEPARERADE FLIKAR FÖR FILM, SERIE, VOD-KANALER & LIVE) */}
+          {/* TOPP-NAVIGERING */}
           <header className="h-16 sm:h-20 bg-gradient-to-b from-black/95 via-black/80 to-transparent px-4 sm:px-8 flex items-center justify-between shrink-0 z-30 border-b border-white/5">
             <div className="flex items-center gap-5 sm:gap-7 min-w-0">
               <div
@@ -1533,7 +2048,9 @@
                 </div>
                 <div className="hidden sm:block">
                   <span className="font-black tracking-wider text-base text-white block leading-none">ZAPPAPORTALEN</span>
-                  <span className="text-[9px] font-bold tracking-widest uppercase text-[#F3D078] block mt-0.5">ZAPPAPORTALEN.SE</span>
+                  <span className="text-[9px] font-bold tracking-widest uppercase text-[#F3D078] block mt-0.5">
+                    {appEdition === 'free' ? 'FREE AD-EDITION' : 'ROYAL EDITION'}
+                  </span>
                 </div>
               </div>
 
@@ -1617,10 +2134,51 @@
             )}
           </header>
 
+          {/* VISUELL NOTIS VID EXTERN SPELARE (VLC/POTPLAYER) */}
+          {externalPlayerNotice && (
+            <div className="bg-[#F3D078] text-black text-xs font-extrabold py-2 px-4 text-center z-40 shadow-lg flex items-center justify-center gap-3">
+              <span>{externalPlayerNotice}</span>
+              <button
+                onClick={() => downloadSingleM3U(currentMedia)}
+                className="underline bg-black text-[#F3D078] px-2.5 py-0.5 rounded-lg text-[11px]"
+              >
+                Ladda ner .m3u-fil nu
+              </button>
+            </div>
+          )}
+
           {/* HUVUDINNEHÅLL */}
           {user ? (
             <main className="flex-1 overflow-y-auto thin-scrollbar pb-28 relative z-10">
               
+              {/* BANNER FÖR NY ENHET (NÄR M3U/EPG-LÄNKAR SYNKATS FRÅN DATOR TILL TELEFON) (Punkt 6) */}
+              {needsDeviceSyncReload && (m3uUrl || savedM3uUrl) && (
+                <div className="mx-4 sm:mx-8 mt-4 p-4 rounded-2xl bg-amber-950/70 border border-[#F3D078] flex flex-wrap items-center justify-between gap-3 shadow-lg">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-extrabold text-[#F3D078]">📲 Dina M3U- och EPG-länkar är synkade på denna enhet!</p>
+                    <p className="text-[11px] text-zinc-300">
+                      Länkarna ligger sparade, men du behöver läsa in själva kanal- och tablådatan lokalt på denna enhet.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSyncReloadOnThisDevice}
+                      disabled={isM3uLoading || isEpgLoading}
+                      style={{ backgroundColor: accentColor }}
+                      className="text-black font-extrabold px-4 py-2 rounded-xl text-xs shadow hover:brightness-110 transition"
+                    >
+                      {isM3uLoading || isEpgLoading ? '⏳ Laddar in...' : '🔄 Läs in M3U & EPG nu'}
+                    </button>
+                    <button
+                      onClick={() => { setActiveTab('settings'); setSettingsSubView('sources'); }}
+                      className="bg-zinc-900 text-white px-3 py-2 rounded-xl text-xs font-bold border border-white/15"
+                    >
+                      Öppna Källor
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* FULLSKÄRMS- / HUVUDSPELARVY */}
               {isFullscreenPlayer && currentMedia && (
                 <div className="max-w-6xl mx-auto px-4 sm:px-8 py-4 space-y-5">
@@ -1668,30 +2226,36 @@
                       <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center space-y-4">
                         <span className="bg-[#F3D078] text-black text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-black live-dot" />
-                          LIVE / STREAM
+                          EXTERN UPPSPELNING REKOMMENDERAS
                         </span>
                         <p className="text-white font-bold text-base sm:text-lg max-w-md">
-                          Det är ett problem med streamingen av denna kanal
+                          Webbläsaren behöver hjälp av VLC eller extern spelare för denna kanal
                         </p>
                         <p className="text-xs text-zinc-400 max-w-md">{videoError}</p>
                         <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
                           <button
-                            onClick={() => openInExternalPlayer('vlc')}
+                            onClick={() => openInExternalPlayer('vlc', currentMedia)}
                             className="bg-[#FF6B00] hover:bg-[#e55f00] text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-lg transition"
                           >
-                            🟠 Spela i VLC
+                            🟠 Öppna i VLC
                           </button>
                           <button
-                            onClick={() => openInExternalPlayer('potplayer')}
+                            onClick={() => openInExternalPlayer('potplayer', currentMedia)}
                             className="bg-[#2B5B84] hover:bg-[#346C9C] text-white font-extrabold px-4 py-2.5 rounded-xl text-xs shadow-lg transition"
                           >
                             🔵 PotPlayer
                           </button>
                           <button
-                            onClick={() => downloadSingleM3U()}
+                            onClick={() => downloadSingleM3U(currentMedia)}
+                            className="bg-[#F3D078] hover:brightness-110 text-black font-extrabold px-4 py-2.5 rounded-xl text-xs transition"
+                          >
+                            📥 Ladda ner .m3u (Öppnas i VLC)
+                          </button>
+                          <button
+                            onClick={() => copyStreamUrl(currentMedia)}
                             className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs border border-white/10 transition"
                           >
-                            📥 Ladda ner .m3u
+                            {copyFeedback ? '✓ Länk kopierad!' : '🔗 Kopiera strömlänk'}
                           </button>
                         </div>
                       </div>
@@ -1749,13 +2313,19 @@
                           ★ Favoritmapp
                         </button>
                         <button
-                          onClick={() => openInExternalPlayer('vlc')}
+                          onClick={() => openInExternalPlayer('vlc', currentMedia)}
                           className="bg-[#FF6B00] hover:brightness-110 text-white px-4 py-2.5 rounded-xl text-xs font-extrabold transition"
                         >
-                          🟠 VLC
+                          🟠 Öppna i VLC
                         </button>
                         <button
-                          onClick={() => copyStreamUrl()}
+                          onClick={() => downloadSingleM3U(currentMedia)}
+                          className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] px-4 py-2.5 rounded-xl text-xs font-extrabold border border-white/10 transition"
+                        >
+                          📥 .m3u-fil
+                        </button>
+                        <button
+                          onClick={() => copyStreamUrl(currentMedia)}
                           className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold border border-white/10 transition"
                         >
                           {copyFeedback ? '✓ Kopierad!' : '🔗 Kopiera länk'}
@@ -1766,22 +2336,32 @@
                 </div>
               )}
 
-              {/* EXPANDERAD KATEGORI-VY */}
+              {/* EXPANDERAD KATEGORI-VY (MED STÖD FÖR FLERVALS-BORTTAGNING OM DET ÄR EN FAVORITVY) */}
               {!isFullscreenPlayer && expandedCategory && (
                 <div className="px-4 sm:px-8 py-6 space-y-6">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
                     <div>
                       <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#F3D078]">KATALOGVY</span>
                       <h1 className="text-xl sm:text-2xl font-black text-white mt-0.5">
                         {expandedCategory.title} ({expandedCategory.items.length})
                       </h1>
                     </div>
-                    <button
-                      onClick={() => { setExpandedCategory(null); setRenderLimit(80); }}
-                      className="bg-zinc-900 hover:bg-zinc-800 border border-white/15 px-4 py-2 rounded-xl text-xs font-bold transition"
-                    >
-                      ← Tillbaka
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {expandedCategory.isFavoriteView && (
+                        <button
+                          onClick={() => setManageFavModal(true)}
+                          className="bg-[#F3D078] text-black px-4 py-2 rounded-xl text-xs font-extrabold transition"
+                        >
+                          🗑 Markera & Ta bort flera favoriter
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setExpandedCategory(null); setRenderLimit(80); }}
+                        className="bg-zinc-900 hover:bg-zinc-800 border border-white/15 px-4 py-2 rounded-xl text-xs font-bold transition"
+                      >
+                        ← Tillbaka
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
@@ -1793,6 +2373,22 @@
                       >
                         <SmartMediaImage src={item.logo} alt={item.name} mode="poster" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent z-10" />
+                        {expandedCategory.isFavoriteView && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              quickRemoveSingleFavorite(item);
+                              setExpandedCategory((prev) => ({
+                                ...prev,
+                                items: prev.items.filter((x) => x.id !== item.id)
+                              }));
+                            }}
+                            title="Ta bort favorit"
+                            className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow"
+                          >
+                            🗑
+                          </button>
+                        )}
                         <div className="relative z-20 p-3 space-y-1 text-center">
                           <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-[#F3D078] text-black inline-block">
                             {item.type === 'live' ? 'LIVE' : item.type === 'vod_channel' ? 'VOD-KANAL' : item.type === 'series' ? 'SERIE' : 'FILM'}
@@ -1818,19 +2414,17 @@
               {!isFullscreenPlayer && !expandedCategory && (activeTab === 'home' || activeTab === 'movies' || activeTab === 'series') && (
                 <div className="space-y-8 pb-10">
                   
-                  {/* PROFFSIG HERO-BANNER UTAN INZOOMAD/KAPAD BILD */}
+                  {/* HERO-BANNER */}
                   {heroItem && (
                     <div className="relative w-full h-[360px] sm:h-[430px] flex flex-col justify-end overflow-hidden border-b border-white/5 bg-black">
                       {heroItem.logo ? (
                         <>
-                          {/* Oskärpt bakgrund som fyller bredden mjukt */}
                           <img
                             src={heroItem.logo}
                             alt=""
                             aria-hidden="true"
                             className="absolute inset-0 w-full h-full object-cover object-center blur-2xl opacity-35 scale-105"
                           />
-                          {/* Skarp, o-inzoomad poster/bild i rätt proportioner */}
                           <img
                             src={heroItem.logo}
                             alt={heroItem.name}
@@ -1899,6 +2493,9 @@
                     </div>
                   )}
 
+                  {/* GOOGLE ADSENSE I GRATISVERSIONEN (Punkt 8) */}
+                  {appEdition === 'free' && <GoogleAdBanner position="top" />}
+
                   {channels.length <= 2 && movies.length === 0 && series.length === 0 && vodChannels.length === 0 && (
                     <div className="mx-4 sm:mx-8 p-6 rounded-2xl bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 border border-[#F3D078]/30 flex flex-wrap items-center justify-between gap-4">
                       <div className="space-y-1">
@@ -1930,20 +2527,52 @@
                     />
                   )}
 
-                  {/* RAD 2: FAVORITER */}
-                  {allFavoriteItemsCombined.length > 0 && (
+                  {/* ============================================================================
+                      PUNKT 1 & 7: FAVORITER FILTRERADE PER FLIK (FILM vs SERIER vs ALLA) + SNABBRADERING
+                  ============================================================================ */}
+                  {activeTab === 'movies' && movieFavoritesOnly.length > 0 && (
                     <MediaCarouselRow
-                      title="Favoriter"
+                      title="Favoriter – Filmer"
+                      subtitle="Endast dina sparade filmfavoriter (klicka på 🗑 för att ta bort)"
+                      items={movieFavoritesOnly}
+                      type="poster"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      onQuickRemoveFav={quickRemoveSingleFavorite}
+                      favItemIds={allFavoritedIds}
+                      onExpand={() => setExpandedCategory({ title: 'Favoriter – Filmer', items: movieFavoritesOnly, isFavoriteView: true })}
+                    />
+                  )}
+
+                  {activeTab === 'series' && seriesFavoritesOnly.length > 0 && (
+                    <MediaCarouselRow
+                      title="Favoriter – Serier"
+                      subtitle="Endast dina sparade seriefavoriter (klicka på 🗑 för att ta bort)"
+                      items={seriesFavoritesOnly}
+                      type="poster"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      onQuickRemoveFav={quickRemoveSingleFavorite}
+                      favItemIds={allFavoritedIds}
+                      onExpand={() => setExpandedCategory({ title: 'Favoriter – Serier', items: seriesFavoritesOnly, isFavoriteView: true })}
+                    />
+                  )}
+
+                  {activeTab === 'home' && allFavoriteItemsCombined.length > 0 && (
+                    <MediaCarouselRow
+                      title="Dina Favoriter"
+                      subtitle="Klicka på 🗑 på valfritt kort för att ta bort direkt, eller Expandera för att ta bort flera"
                       items={allFavoriteItemsCombined}
                       type="poster"
                       onSelect={handleCardSelect}
                       onFavClick={setFavModalItem}
+                      onQuickRemoveFav={quickRemoveSingleFavorite}
                       favItemIds={allFavoritedIds}
-                      onExpand={() => setExpandedCategory({ title: 'Favoriter', items: allFavoriteItemsCombined })}
+                      onExpand={() => setExpandedCategory({ title: 'Alla Favoriter', items: allFavoriteItemsCombined, isFavoriteView: true })}
                     />
                   )}
 
-                  {/* RAD 3: NYLIGEN TILLAGDA FILMER (SORTERADE EFTER UPPLADDNINGSTID - SENASTE FÖRST) */}
+                  {/* RAD 3: NYLIGEN TILLAGDA FILMER (SORTERADE EFTER UPPLADDNINGSTID) */}
                   {(activeTab === 'home' || activeTab === 'movies') && recentlyAddedMovies.length > 0 && (
                     <MediaCarouselRow
                       title="Nyligen tillagda filmer"
@@ -1984,7 +2613,7 @@
                     />
                   )}
 
-                  {/* RAD 6: SENAST SEDDA & POPULÄRA LIVE-KANALER */}
+                  {/* RAD 6: LIVE-KANALER */}
                   {activeTab === 'home' && channels.length > 0 && (
                     <MediaCarouselRow
                       title="Live TV & Populära Kanaler"
@@ -2079,10 +2708,12 @@
                         onExpand={() => setExpandedCategory({ title: grpName, items: grpItems })}
                       />
                     ))}
+
+                  {appEdition === 'free' && <GoogleAdBanner position="bottom" />}
                 </div>
               )}
 
-              {/* 2. NY SEPARAT FLIK: VOD-KANALER (SKILJT FRÅN RIKTIGA FILMER) */}
+              {/* 2. SEPARAT FLIK: VOD-KANALER */}
               {!isFullscreenPlayer && !expandedCategory && activeTab === 'vod_channels' && (
                 <div className="px-4 sm:px-8 py-5 space-y-6">
                   <div className="space-y-3">
@@ -2182,18 +2813,19 @@
                                     </button>
                                   </div>
 
-                                  <div className="mt-3 pt-2.5 border-t border-white/5 space-y-1">
-                                    {epg?.currentProg ? (
-                                      <>
-                                        <div className="flex justify-between text-[10px] text-zinc-400">
-                                          <span>{formatTime(epg.currentProg.start)} - {formatTime(epg.currentProg.stop)}</span>
-                                          <span>{epg.progress}%</span>
-                                        </div>
-                                        <p className="text-xs font-bold text-white truncate">{epg.currentProg.title}</p>
-                                      </>
-                                    ) : (
-                                      <p className="text-[11px] text-[#F3D078]/80 font-medium">24/7 VOD-ström</p>
-                                    )}
+                                  <div className="mt-3 pt-2.5 border-t border-white/5 flex justify-between items-center">
+                                    <span className="text-[11px] text-[#F3D078]/80 font-medium">
+                                      {epg?.currentProg ? epg.currentProg.title : '24/7 VOD-ström'}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openInExternalPlayer('vlc', ch);
+                                      }}
+                                      className="text-[10px] font-extrabold bg-[#FF6B00] text-white px-2 py-0.5 rounded"
+                                    >
+                                      VLC
+                                    </button>
                                   </div>
                                 </div>
                               );
@@ -2225,7 +2857,7 @@
                         onClick={() => setManageFavModal(true)}
                         className="text-xs font-extrabold text-[#F3D078] bg-[#F3D078]/10 border border-[#F3D078]/30 px-3.5 py-2 rounded-xl"
                       >
-                        ★ Hantera Smarta Mappar
+                        ★ Hantera Smarta Mappar & Favoriter
                       </button>
                     </div>
 
@@ -2315,17 +2947,29 @@
                                     </div>
                                   </div>
 
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setFavModalItem(ch);
-                                    }}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${
-                                      allFavoritedIds.has(ch.id) ? 'bg-[#F3D078] text-black font-black' : 'bg-white/5 text-zinc-400 hover:text-white'
-                                    }`}
-                                  >
-                                    ★
-                                  </button>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openInExternalPlayer('vlc', ch);
+                                      }}
+                                      title="Öppna direkt i VLC"
+                                      className="px-2 py-1 rounded-lg bg-[#FF6B00] text-white text-[10px] font-extrabold"
+                                    >
+                                      VLC
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFavModalItem(ch);
+                                      }}
+                                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs ${
+                                        allFavoritedIds.has(ch.id) ? 'bg-[#F3D078] text-black font-black' : 'bg-white/5 text-zinc-400 hover:text-white'
+                                      }`}
+                                    >
+                                      ★
+                                    </button>
+                                  </div>
                                 </div>
 
                                 <div className="mt-3 pt-2.5 border-t border-white/5 space-y-1">
@@ -2363,11 +3007,13 @@
                 </div>
               )}
 
-              {/* 4. FLIK: TV-GUIDE */}
+              {/* ============================================================================
+                  4. FLIK: TV-GUIDE MED MAPPVÄLJARE FÖR FAVORITER & KATEGORIER (PUNKT 4 & 5)
+              ============================================================================ */}
               {!isFullscreenPlayer && activeTab === 'epg' && (
                 <div className="max-w-5xl mx-auto px-4 sm:px-8 py-4 space-y-5">
                   <div className="rounded-2xl bg-[#0B0C0E] border border-white/15 overflow-hidden shadow-2xl">
-                    <div className="relative aspect-video max-h-[260px] w-full bg-black flex items-center justify-center">
+                    <div className="relative aspect-video max-h-[240px] w-full bg-black flex items-center justify-center">
                       <span className="absolute top-3 left-3 z-20 bg-[#F3D078] text-black text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow">
                         <span className="w-2 h-2 rounded-full bg-black live-dot" />
                         LIVE
@@ -2375,16 +3021,24 @@
                       {currentMedia ? (
                         <div className="text-center space-y-2 p-4">
                           <p className="text-sm sm:text-base font-extrabold text-white">{currentMedia.name}</p>
-                          <button
-                            onClick={() => setIsFullscreenPlayer(true)}
-                            style={{ backgroundColor: accentColor }}
-                            className="text-black font-extrabold px-5 py-2 rounded-full text-xs shadow"
-                          >
-                            ▶ Öppna i fullskärm
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setIsFullscreenPlayer(true)}
+                              style={{ backgroundColor: accentColor }}
+                              className="text-black font-extrabold px-5 py-2 rounded-full text-xs shadow"
+                            >
+                              ▶ Öppna i fullskärm
+                            </button>
+                            <button
+                              onClick={() => openInExternalPlayer('vlc', currentMedia)}
+                              className="bg-[#FF6B00] text-white font-extrabold px-4 py-2 rounded-full text-xs shadow"
+                            >
+                              🟠 VLC
+                            </button>
+                          </div>
                         </div>
                       ) : (
-                        <p className="text-sm text-zinc-400">Välj en kanal nedan för att starta sändningen</p>
+                        <p className="text-sm text-zinc-400">Välj en kanal i TV-guiden nedan för att starta sändningen</p>
                       )}
                     </div>
 
@@ -2398,102 +3052,142 @@
                       <p className="text-xs text-zinc-500 line-clamp-2">
                         {activeChannelEpg?.currentProg?.desc || 'TV-guiden innehåller ingen information om programmet som visas just nu.'}
                       </p>
-                      <div className="pt-2 flex items-center justify-between text-xs text-zinc-400">
-                        <span>
-                          {activeChannelEpg?.currentProg
-                            ? `${formatTime(activeChannelEpg.currentProg.start)} - ${formatTime(activeChannelEpg.currentProg.stop)}`
-                            : '20:00 - 21:00 (60 min)'}
-                        </span>
-                      </div>
-                      <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          style={{ width: `${activeChannelEpg?.progress || 45}%`, backgroundColor: accentColor }}
-                          className="h-full rounded-full"
-                        />
-                      </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-3">
-                    <div className="flex items-center gap-6">
-                      <span style={{ color: accentColor }} className="text-xs sm:text-sm font-black uppercase tracking-wider border-b-2 border-[#F3D078] pb-1">
-                        IDAG
-                      </span>
-                      <span className="text-xs sm:text-sm font-bold text-zinc-400">
-                        {new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                  {/* Mappväljare i TV-guiden (Punkt 5): Snabbknappar + Dropdown + Sök */}
+                  <div className="bg-[#111215] border border-white/10 rounded-2xl p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-[#F3D078]">📁 Välj mapp i TV-guiden:</span>
+                        <select
+                          value={epgSelectedFolder}
+                          onChange={(e) => setEpgSelectedFolder(e.target.value)}
+                          className="bg-zinc-900 border border-[#F3D078]/40 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none"
+                        >
+                          <option value="ALL">Alla Kanaler ({channels.length})</option>
+                          <option value="ALL_FAV">★ Alla Favoritkanaler ({liveFavoritesOnly.length})</option>
+                          <optgroup label="★ Dina Smarta Mappar">
+                            {favLists.map((fl) => (
+                              <option key={fl.id} value={'FAV:' + fl.id}>
+                                ★ {fl.name} ({(favItemsById[fl.id] || []).filter((x) => x.type === 'live' || x.type === 'vod_channel').length})
+                              </option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="📂 M3U-Grupper">
+                            {Object.keys(liveGroups).map((grp) => (
+                              <option key={grp} value={'GRP:' + grp}>
+                                {grp} ({liveGroups[grp].length})
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <input
+                          type="text"
+                          placeholder="Sök kanal i vald mapp..."
+                          value={epgSearch}
+                          onChange={(e) => setEpgSearch(e.target.value)}
+                          className="flex-1 sm:w-56 bg-zinc-900 border border-white/15 focus:border-[#F3D078] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                        />
+                        <button
+                          onClick={() => { setActiveTab('settings'); setSettingsSubView('sources'); }}
+                          className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] px-3 py-2 rounded-xl text-xs font-bold shrink-0"
+                        >
+                          🔄 Ladda EPG
+                        </button>
+                      </div>
                     </div>
-                    <input
-                      type="text"
-                      placeholder="Sök kanal i TV-guiden..."
-                      value={epgSearch}
-                      onChange={(e) => setEpgSearch(e.target.value)}
-                      className="w-full sm:w-64 bg-zinc-900 border border-white/15 focus:border-[#F3D078] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
-                    />
+
+                    {/* Snabbpiller för Favoritmappar direkt i TV-guiden */}
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
+                      <button
+                        onClick={() => setEpgSelectedFolder('ALL')}
+                        style={epgSelectedFolder === 'ALL' ? { backgroundColor: accentColor } : {}}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold shrink-0 transition ${
+                          epgSelectedFolder === 'ALL' ? 'text-black' : 'bg-zinc-900 text-zinc-400 border border-white/10'
+                        }`}
+                      >
+                        Alla ({channels.length})
+                      </button>
+                      {favLists.map((fl) => (
+                        <button
+                          key={fl.id}
+                          onClick={() => setEpgSelectedFolder('FAV:' + fl.id)}
+                          style={epgSelectedFolder === 'FAV:' + fl.id ? { backgroundColor: accentColor } : {}}
+                          className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold shrink-0 transition ${
+                            epgSelectedFolder === 'FAV:' + fl.id
+                              ? 'text-black'
+                              : 'bg-[#F3D078]/10 text-[#F3D078] border border-[#F3D078]/30'
+                          }`}
+                        >
+                          ★ {fl.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="space-y-2.5">
-                    {channels
-                      .filter((ch) => !epgSearch || ch.name.toLowerCase().includes(epgSearch.toLowerCase()))
-                      .slice(0, 60)
-                      .map((ch) => {
-                        const info = getChannelEpg(ch);
-                        return (
-                          <div
-                            key={ch.id}
-                            onClick={() => startPlayback(ch, true)}
-                            className="grid grid-cols-12 rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#F3D078] cursor-pointer transition"
-                          >
-                            <div className="col-span-5 sm:col-span-4 p-3.5 bg-[#16181C] flex items-center gap-3 border-r border-white/10">
-                              <div className="w-10 h-10 rounded-lg bg-black border border-white/10 flex items-center justify-center p-1 shrink-0">
-                                {ch.logo ? (
-                                  <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
-                                ) : (
-                                  <span className="text-[10px] font-black text-[#F3D078]">TV</span>
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-xs sm:text-sm font-extrabold text-white truncate">{ch.name}</h4>
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  {ch.quality && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/25 text-zinc-300">
-                                      {ch.quality}
-                                    </span>
-                                  )}
-                                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-[#F3D078]/20 text-[#F3D078]">
-                                    LIVE
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="col-span-7 sm:col-span-8 p-3.5 bg-gradient-to-r from-[#2c2208]/70 via-[#1a1405]/60 to-[#0d0a03]/60 flex flex-col justify-center">
-                              {info?.currentProg ? (
-                                <>
-                                  <span className="text-[10px] font-bold text-[#F3D078]/80">
-                                    {formatTime(info.currentProg.start)} - {formatTime(info.currentProg.stop)}
-                                  </span>
-                                  <p className="text-xs sm:text-sm font-extrabold text-white truncate mt-0.5">
-                                    {info.currentProg.title}
-                                  </p>
-                                  {info.nextProg && (
-                                    <p className="text-[11px] text-zinc-400 truncate mt-1">
-                                      Nästa ({formatTime(info.nextProg.start)}): {info.nextProg.title}
-                                    </p>
-                                  )}
-                                </>
+                    {epgFilteredChannels.slice(0, 80).map((ch) => {
+                      const info = getChannelEpg(ch);
+                      return (
+                        <div
+                          key={ch.id}
+                          onClick={() => startPlayback(ch, true)}
+                          className="grid grid-cols-12 rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#F3D078] cursor-pointer transition"
+                        >
+                          <div className="col-span-5 sm:col-span-4 p-3.5 bg-[#16181C] flex items-center gap-3 border-r border-white/10">
+                            <div className="w-10 h-10 rounded-lg bg-black border border-white/10 flex items-center justify-center p-1 shrink-0">
+                              {ch.logo ? (
+                                <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
                               ) : (
-                                <>
-                                  <span className="text-[10px] text-zinc-400">
-                                    {new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                  <p className="text-xs sm:text-sm font-bold text-zinc-200 mt-0.5">EPG inte tillgänglig</p>
-                                </>
+                                <span className="text-[10px] font-black text-[#F3D078]">TV</span>
                               )}
                             </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-xs sm:text-sm font-extrabold text-white truncate">{ch.name}</h4>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                {ch.quality && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/25 text-zinc-300">
+                                    {ch.quality}
+                                  </span>
+                                )}
+                                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-[#F3D078]/20 text-[#F3D078]">
+                                  {ch.group}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        );
-                      })}
+
+                          <div className="col-span-7 sm:col-span-8 p-3.5 bg-gradient-to-r from-[#2c2208]/70 via-[#1a1405]/60 to-[#0d0a03]/60 flex flex-col justify-center">
+                            {info?.currentProg ? (
+                              <>
+                                <span className="text-[10px] font-bold text-[#F3D078]/80">
+                                  {formatTime(info.currentProg.start)} - {formatTime(info.currentProg.stop)}
+                                </span>
+                                <p className="text-xs sm:text-sm font-extrabold text-white truncate mt-0.5">
+                                  {info.currentProg.title}
+                                </p>
+                                {info.nextProg && (
+                                  <p className="text-[11px] text-zinc-400 truncate mt-1">
+                                    Nästa ({formatTime(info.nextProg.start)}): {info.nextProg.title}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-[10px] text-zinc-400">
+                                  {new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <p className="text-xs sm:text-sm font-bold text-zinc-200 mt-0.5">EPG inte tillgänglig</p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2504,7 +3198,7 @@
                   
                   <div className="flex flex-col items-center justify-center space-y-2 pt-2">
                     <span className="bg-[#F3D078] text-black font-black text-xs sm:text-sm tracking-wider uppercase px-5 py-1.5 rounded-full shadow-[0_0_25px_rgba(243,208,120,0.4)]">
-                      PRENUMERANT • ZAPPAPORTALEN.SE
+                      {appEdition === 'free' ? 'ZAPPAPORTALEN GRATISVERSION (MED REKLAM)' : 'PRENUMERANT • ZAPPAPORTALEN ROYAL'}
                     </span>
                     <span className="text-xs text-zinc-400">{user.email}</span>
                   </div>
@@ -2512,15 +3206,19 @@
                   {settingsSubView === 'sources' ? (
                     <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-6">
                       <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                        <h2 className="text-base font-extrabold text-white">📂 Spellista Hantering & EPG</h2>
+                        <h2 className="text-base font-extrabold text-white">📂 Spellista Hantering & EPG (Synkas mellan enheter)</h2>
                         <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#F3D078]">
                           ← Tillbaka
                         </button>
                       </div>
 
+                      <div className="p-3.5 rounded-xl bg-amber-950/30 border border-[#F3D078]/30 text-xs text-zinc-300 leading-relaxed">
+                        💡 <strong className="text-[#F3D078]">Smart Enhetssynk:</strong> Dina textlänkar nedan sparas automatiskt på ditt konto. Om du loggar in via mobilen ligger länkarna kvar här – tryck bara på knappen för att läsa in kanalerna och EPG-tablån till telefonens minne!
+                      </div>
+
                       <div className="space-y-4">
                         <div className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-2">
-                          <label className="text-xs font-extrabold text-white block">1. Ladda upp M3U-fil (Snabbast & utan CORS)</label>
+                          <label className="text-xs font-extrabold text-white block">1. Ladda upp M3U-fil från enheten (Snabbast & utan CORS)</label>
                           <input
                             type="file"
                             accept=".m3u,.m3u8,.txt"
@@ -2530,48 +3228,63 @@
                         </div>
 
                         <form onSubmit={handleLoadM3uUrl} className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-3">
-                          <label className="text-xs font-extrabold text-white block">2. Ladda M3U via URL-länk</label>
+                          <label className="text-xs font-extrabold text-white block">2. M3U-länk (Sparas i molnet & LocalStorage)</label>
                           <input
                             type="url"
-                            placeholder="https://..."
-                            value={m3uUrl || savedM3uUrl}
+                            placeholder="https://din-leverantor.se/get.php?username=..."
+                            value={m3uUrl}
                             onChange={(e) => setM3uUrl(e.target.value)}
                             className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
                           />
-                          <button type="submit" style={{ backgroundColor: accentColor }} className="w-full py-2.5 rounded-xl text-xs font-extrabold text-black">
-                            Hämta & Cachelagra Spellista
+                          <button
+                            type="submit"
+                            disabled={isM3uLoading}
+                            style={{ backgroundColor: accentColor }}
+                            className="w-full py-2.5 rounded-xl text-xs font-extrabold text-black flex items-center justify-center gap-2"
+                          >
+                            {isM3uLoading && <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full spinner inline-block" />}
+                            <span>{isM3uLoading ? 'Läser in M3U-spellista...' : 'Hämta & Läs in M3U på denna enhet'}</span>
                           </button>
                         </form>
 
-                        <div className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-2">
-                          <label className="text-xs font-extrabold text-white block">3. Ladda upp EPG (.xml) eller ange URL</label>
+                        {/* PUNKT 4: FIXAD EPG-INLÄSNING VIA KNAPP OCH FIL */}
+                        <div className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-3">
+                          <label className="text-xs font-extrabold text-white block">3. TV-tablå / EPG (.xml-fil eller XMLTV-länk)</label>
                           <input
                             type="file"
-                            accept=".xml"
+                            accept=".xml,.gz"
                             onChange={handleEpgFileUpload}
-                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-zinc-800 file:text-[#F3D078] file:font-bold cursor-pointer mb-2"
+                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-zinc-800 file:text-[#F3D078] file:font-bold cursor-pointer"
                           />
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2 pt-1">
                             <input
                               type="url"
-                              placeholder="http://... (XMLTV EPG URL)"
+                              placeholder="http://.../xmltv.php?username=..."
                               value={epgUrl}
                               onChange={(e) => setEpgUrl(e.target.value)}
-                              className="flex-1 bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                              className="flex-1 bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
                             />
                             <button
                               type="button"
+                              disabled={isEpgLoading}
                               onClick={() => loadEpgFromUrl(epgUrl)}
-                              className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] px-4 py-2 rounded-xl text-xs font-bold"
+                              style={{ backgroundColor: accentColor }}
+                              className="text-black px-5 py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shrink-0 hover:brightness-110 transition"
                             >
-                              Ladda EPG
+                              {isEpgLoading && <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full spinner inline-block" />}
+                              <span>{isEpgLoading ? 'Laddar EPG...' : 'Ladda EPG'}</span>
                             </button>
                           </div>
                         </div>
 
-                        {(statusMsg || epgStatus) && (
+                        {statusMsg && (
                           <div className="p-3.5 rounded-xl bg-amber-950/60 border border-[#F3D078]/40 text-xs font-bold text-[#F3D078] text-center">
-                            {statusMsg || epgStatus}
+                            {statusMsg}
+                          </div>
+                        )}
+                        {epgStatus && (
+                          <div className="p-3.5 rounded-xl bg-zinc-900 border border-[#F3D078]/40 text-xs font-bold text-[#F3D078] text-center">
+                            {epgStatus}
                           </div>
                         )}
                       </div>
@@ -2579,7 +3292,7 @@
                   ) : settingsSubView === 'appearance' ? (
                     <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-5">
                       <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                        <h2 className="text-base font-extrabold text-white">🎨 Tillägg: teman och utseende</h2>
+                        <h2 className="text-base font-extrabold text-white">🎨 Tillägg: teman, utseende & utgåva</h2>
                         <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#F3D078]">
                           ← Tillbaka
                         </button>
@@ -2611,6 +3324,53 @@
                           </div>
                         </div>
 
+                        {/* Växlare för Punkt 8: Gratis (Google Reklam) vs Premium (Betalvägg) */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-black/50 border border-white/10">
+                          <div>
+                            <p className="text-sm font-bold text-white">Apputgåva (Gratis med Google Ads vs Royal Betalvägg)</p>
+                            <p className="text-xs text-zinc-400">Växla för att förhandsgranska båda versionerna</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setAppEdition('free');
+                                try { localStorage.setItem('zp_app_edition', 'free'); } catch (e) {}
+                              }}
+                              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border ${
+                                appEdition === 'free' ? 'bg-[#F3D078] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
+                              }`}
+                            >
+                              📢 Gratis (Google Ads)
+                            </button>
+                            <button
+                              onClick={() => {
+                                setAppEdition('premium');
+                                try { localStorage.setItem('zp_app_edition', 'premium'); } catch (e) {}
+                              }}
+                              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border ${
+                                appEdition === 'premium' ? 'bg-[#F3D078] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
+                              }`}
+                            >
+                              👑 Royal (Betalvägg)
+                            </button>
+                          </div>
+                        </div>
+
+                        {appEdition === 'premium' && (
+                          <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
+                            <div>
+                              <p className="text-sm font-bold text-white">Testa Betalväggs-modal (Royal)</p>
+                              <p className="text-xs text-zinc-400">Öppna betalväggen som visas för icke-prenumeranter</p>
+                            </div>
+                            <button
+                              onClick={() => setPaywallModal(true)}
+                              className="px-4 py-2 rounded-xl text-xs font-extrabold bg-[#F3D078] text-black"
+                            >
+                              Visa Betalvägg
+                            </button>
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
                           <div>
                             <p className="text-sm font-bold text-white">Smart-TV / Storskärmsläge</p>
@@ -2627,23 +3387,75 @@
                         </div>
                       </div>
                     </div>
+                  ) : settingsSubView === 'diagnostics' ? (
+                    /* PUNKT 2: SÄKERHETS- & KRASCHRAPPORT-VY I INSTÄLLNINGAR */
+                    <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-5">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                        <h2 className="text-base font-extrabold text-white">🛡️ Säkerhet & Anonyma Kraschrapporter</h2>
+                        <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#F3D078]">
+                          ← Tillbaka
+                        </button>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-black/60 border border-[#F3D078]/30 space-y-2">
+                        <p className="text-xs font-extrabold text-[#F3D078]">Automatisk felsökning & kvalitetssäkring</p>
+                        <p className="text-xs text-zinc-300 leading-relaxed">
+                          För att vi snabbt ska kunna upptäcka och rätta till eventuella buggar skickar Zappaportalen anonymiserade kraschrapporter (felmeddelande, webbläsartyp och tidsstämpel) till tabellen <code className="text-[#F3D078]">crash_reports</code> om ett oväntat scriptfel skulle uppstå. Ingen personlig spellistedata eller lösenord inkluderas någonsin.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
+                        <div>
+                          <p className="text-sm font-bold text-white">Skicka anonyma kraschrapporter automatiskt</p>
+                          <p className="text-xs text-zinc-400">Hjälper till att förbättra stabiliteten i Zappaportalen</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const next = !crashReportingEnabled;
+                            setCrashReportingEnabled(next);
+                            try { localStorage.setItem('zp_crash_reports_enabled', String(next)); } catch (e) {}
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-extrabold ${
+                            crashReportingEnabled ? 'bg-[#F3D078] text-black' : 'bg-zinc-800 text-zinc-400'
+                          }`}
+                        >
+                          {crashReportingEnabled ? 'AKTIVERAD' : 'AVSTÄNGD'}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
+                        <div>
+                          <p className="text-sm font-bold text-white">Skicka testrapport till Supabase</p>
+                          <p className="text-xs text-zinc-400">Verifiera att anslutningen till crash_reports fungerar</p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            setCrashTestFeedback('Skickar...');
+                            await sendCrashReport('manual_test', 'Manuell testrapport från Inställningar', 'Ingen stack (Test)');
+                            setCrashTestFeedback('✓ Testrapport skickad!');
+                            setTimeout(() => setCrashTestFeedback(''), 3000);
+                          }}
+                          className="px-4 py-2 rounded-xl text-xs font-extrabold bg-zinc-800 hover:bg-zinc-700 text-[#F3D078]"
+                        >
+                          {crashTestFeedback || 'Skicka testrapport'}
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <div className="bg-[#0B0C0E] border border-white/10 rounded-2xl divide-y divide-white/10 overflow-hidden shadow-2xl">
                       {[
-                        { icon: '👑', label: 'Konto & Status (Zappaportalen Active)', action: () => alert('Zappaportalen (zappaportalen.se) är aktiverad på ditt konto.') },
-                        { icon: '🎨', label: 'Tillägg: teman och utseende', action: () => setSettingsSubView('appearance') },
-                        { icon: '☁️', label: 'Moln-synkronisering (Supabase Cloud)', action: () => { saveToCloud(favLists); alert('Dina Smarta Mappar är synkroniserade med molnet!'); } },
-                        { icon: '✨', label: 'AI & Smarta Favoritmappar', action: () => setManageFavModal(true) },
                         { icon: '📋', label: 'Spellista Hantering (M3U & EPG)', action: () => setSettingsSubView('sources') },
-                        { icon: '▶', label: `Spelare (${playerEngine.toUpperCase()})`, action: () => {
+                        { icon: '✨', label: 'Smarta Favoritmappar & Ta bort favoriter', action: () => setManageFavModal(true) },
+                        { icon: '🎨', label: 'Tillägg: teman, utseende & apputgåva', action: () => setSettingsSubView('appearance') },
+                        { icon: '🛡️', label: `Säkerhet & Kraschrapporter (${crashReportingEnabled ? 'PÅ' : 'AV'})`, action: () => setSettingsSubView('diagnostics') },
+                        { icon: '☁️', label: 'Moln-synkronisering (Supabase Cloud)', action: () => { saveToCloud(favLists); alert('Dina Smarta Mappar och M3U/EPG-länkar är synkroniserade med molnet!'); } },
+                        { icon: '▶', label: `Spelarmotor (${playerEngine.toUpperCase()})`, action: () => {
                           const order = ['auto', 'mpegts', 'hls', 'native'];
                           const next = order[(order.indexOf(playerEngine) + 1) % order.length];
                           setPlayerEngine(next);
                         }},
                         { icon: '📡', label: 'Live & TV-guide', action: () => setActiveTab('epg') },
-                        { icon: '📝', label: 'Metadata & Rensa Lokal Cache', action: handleClearCache },
-                        { icon: '🖥️', label: 'Zappaportalen Media Server & VLC Bridge', action: () => alert('VLC och PotPlayer-bryggan är redo. Klicka på "Spela i VLC" under valfri kanal för direktuppspelning.') },
-                        { icon: '⚙️', label: `Generali (TV-läge: ${tvMode ? 'PÅ' : 'AV'})`, action: () => setTvMode(!tvMode) },
+                        { icon: '📝', label: 'Metadata & Rensa Lokal Mediacache', action: handleClearCache },
                         { icon: '🚪', label: 'Logga ut från konto', action: handleLogout }
                       ].map((row, i) => (
                         <button
@@ -2666,7 +3478,7 @@
                   )}
 
                   <div className="text-center pt-4">
-                    <span className="text-xs text-zinc-600 font-semibold">Version 25.2.0 • Zappaportalen (zappaportalen.se)</span>
+                    <span className="text-xs text-zinc-600 font-semibold">Version 25.4.0 • Zappaportalen (zappaportalen.se)</span>
                   </div>
                 </div>
               )}
@@ -2747,7 +3559,7 @@
               </div>
               {[
                 { label: '🔍 Sök i hela katalogen', action: () => { setSearchModal(true); setQuickDrawer(false); } },
-                { label: '★ Dina Smarta Mappar', action: () => { setManageFavModal(true); setQuickDrawer(false); } },
+                { label: '★ Hantera & Ta bort Favoriter', action: () => { setManageFavModal(true); setQuickDrawer(false); } },
                 { label: '📂 Ladda M3U / EPG', action: () => { setActiveTab('settings'); setSettingsSubView('sources'); setQuickDrawer(false); } },
                 { label: '🎞️ Gå till VOD-kanaler', action: () => { setActiveTab('vod_channels'); setIsFullscreenPlayer(false); setQuickDrawer(false); } },
                 { label: '📺 Gå till Live TV', action: () => { setActiveTab('live'); setIsFullscreenPlayer(false); setQuickDrawer(false); } },
@@ -2795,7 +3607,7 @@
                 </div>
 
                 <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto thin-scrollbar">
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-2.5">
                     <button
                       onClick={() => {
                         const firstTarget = detailItem.isSeriesShow ? detailItem.episodes[0] : detailItem;
@@ -2817,9 +3629,16 @@
 
                     <button
                       onClick={() => openInExternalPlayer('vlc', detailItem.isSeriesShow ? detailItem.episodes[0] : detailItem)}
-                      className="bg-[#FF6B00] text-white font-bold px-5 py-3 rounded-full text-xs"
+                      className="bg-[#FF6B00] text-white font-extrabold px-5 py-3 rounded-full text-xs"
                     >
                       🟠 Öppna i VLC
+                    </button>
+
+                    <button
+                      onClick={() => downloadSingleM3U(detailItem.isSeriesShow ? detailItem.episodes[0] : detailItem)}
+                      className="bg-zinc-800 text-white font-bold px-4 py-3 rounded-full text-xs border border-white/10"
+                    >
+                      📥 .m3u
                     </button>
                   </div>
 
@@ -2859,7 +3678,18 @@
                                 <span className="text-xs font-black text-zinc-500 w-6">{ep.episode || idx + 1}.</span>
                                 <span className="text-xs font-bold text-white truncate">{ep.name}</span>
                               </div>
-                              <span className="text-xs font-extrabold text-[#F3D078] shrink-0">▶ Spela</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openInExternalPlayer('vlc', ep);
+                                  }}
+                                  className="text-[10px] font-bold bg-[#FF6B00] text-white px-2 py-1 rounded"
+                                >
+                                  VLC
+                                </button>
+                                <span className="text-xs font-extrabold text-[#F3D078]">▶ Spela</span>
+                              </div>
                             </div>
                           ))}
                       </div>
@@ -2925,6 +3755,57 @@
             </div>
           )}
 
+          {/* PUNKT 8: BETALVÄGG-MODAL FÖR ROYAL / PREMIUM-VERSIONEN */}
+          {paywallModal && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+              <div className="bg-[#111215] border-2 border-[#F3D078] rounded-3xl w-full max-w-md p-7 space-y-5 shadow-[0_0_50px_rgba(243,208,120,0.3)] text-center">
+                <div className="w-16 h-16 rounded-full bg-[#F3D078] text-black font-black text-3xl flex items-center justify-center mx-auto shadow-lg">
+                  👑
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#F3D078]">ZAPPAPORTALEN ROYAL</span>
+                  <h3 className="text-xl font-black text-white">Uppgradera för att låsa upp alla funktioner</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Med Zappaportalen Royal får du helt reklamfri strömning, obegränsade Smarta Favoritmappar, automatisk molnsynk mellan dator & mobil samt full EPG-tablå.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-black/60 border border-white/10 text-left space-y-2 text-xs text-zinc-200">
+                  <p>✓ 100 % Reklamfritt gränssnitt</p>
+                  <p>✓ Synka M3U, EPG & Favoriter mellan alla enheter</p>
+                  <p>✓ Direktbrygga till VLC, PotPlayer & 4K-strömmar</p>
+                </div>
+
+                <div className="space-y-2.5 pt-2">
+                  <a
+                    href={STRIPE_OR_PAYMENT_LINK}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ backgroundColor: accentColor }}
+                    className="block w-full text-black font-extrabold py-3.5 rounded-2xl text-xs shadow-lg hover:brightness-110 transition"
+                  >
+                    Lås upp Zappaportalen Royal nu
+                  </a>
+                  <button
+                    onClick={() => {
+                      setIsSubscriber(true);
+                      setPaywallModal(false);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-[#F3D078]"
+                  >
+                    Jag har redan betalat (Aktivera Royal på detta konto)
+                  </button>
+                  <button
+                    onClick={() => setPaywallModal(false)}
+                    className="text-xs text-zinc-500 hover:text-white pt-1"
+                  >
+                    Stäng
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* INLOGGNINGS-MODAL */}
           {authModal && (
             <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-50 flex items-center justify-center p-4">
@@ -2982,12 +3863,12 @@
             </div>
           )}
 
-          {/* LÄGG TILL I FAVORITMAPP-MODAL */}
+          {/* LÄGG TILL / TA BORT I FAVORITMAPP-MODAL */}
           {favModalItem && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
               <div className="bg-[#121316] border border-[#F3D078]/40 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
                 <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                  <h3 className="font-extrabold text-sm text-[#F3D078]">★ Lägg till i Favoritmapp</h3>
+                  <h3 className="font-extrabold text-sm text-[#F3D078]">★ Hantera favorit: {favModalItem.name}</h3>
                   <button onClick={() => setFavModalItem(null)} className="text-sm font-bold text-zinc-400">
                     ✕
                   </button>
@@ -3004,7 +3885,7 @@
                         }`}
                       >
                         <span className="text-xs font-bold">★ {list.name}</span>
-                        <span className="text-xs font-extrabold text-[#F3D078]">{checked ? '✓ Tillagd' : '+ Välj'}</span>
+                        <span className="text-xs font-extrabold text-[#F3D078]">{checked ? '✓ Tillagd (Klicka för att ta bort)' : '+ Lägg till'}</span>
                       </div>
                     );
                   })}
@@ -3013,76 +3894,225 @@
             </div>
           )}
 
-          {/* HANTERA SMARTA FAVORITMAPPAR-MODAL */}
+          {/* ============================================================================
+              PUNKT 7: SMARTA FAVORITMAPPAR-MODAL MED KRYSSRUTOR FÖR ATT TA BORT 1 ELLER FLERA
+          ============================================================================ */}
           {manageFavModal && (
-            <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-              <div className="bg-[#121316] border border-[#F3D078]/40 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl">
+            <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-[#121316] border border-[#F3D078]/40 rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl my-auto">
                 <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                  <h3 className="font-extrabold text-base text-[#F3D078]">👑 Smarta Favoritmappar</h3>
-                  <button onClick={() => setManageFavModal(false)} className="text-sm font-bold text-zinc-400 hover:text-white">
+                  <h3 className="font-extrabold text-base text-[#F3D078]">
+                    {editingFavListId ? '🗑 Välj favoriter att ta bort' : '👑 Smarta Favoritmappar'}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setManageFavModal(false);
+                      setEditingFavListId(null);
+                      setSelectedFavIdsForRemoval(new Set());
+                    }}
+                    className="text-sm font-bold text-zinc-400 hover:text-white"
+                  >
                     ✕
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateFavList} className="space-y-3.5 bg-black/60 p-4 rounded-2xl border border-white/10">
-                  <p className="text-xs text-[#F3D078] font-bold">Skapa ny mapp (Manuell eller Auto-regel):</p>
-                  <input
-                    type="text"
-                    placeholder="1. Namn på favoritmappen (t.ex. Sverige FHD)"
-                    value={newListName}
-                    onChange={(e) => setNewListName(e.target.value)}
-                    className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
-                    required
-                  />
-                  <select
-                    value={newListGroup}
-                    onChange={(e) => setNewListGroup(e.target.value)}
-                    className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
-                  >
-                    <option value="ALL">Alla mappar (eller välj en specifik nedan)</option>
-                    {allAvailableGroups.map((grp) => (
-                      <option key={grp} value={grp}>📁 {grp}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="3. Namn måste innehålla (t.ex. FHD, 4K, SVT...)"
-                    value={newListFilter}
-                    onChange={(e) => setNewListFilter(e.target.value)}
-                    className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
-                  />
-                  <button
-                    type="submit"
-                    style={{ backgroundColor: accentColor }}
-                    className="w-full text-black font-extrabold py-2.5 rounded-xl text-xs shadow-lg"
-                  >
-                    + Skapa & Synka Smart Mapp
-                  </button>
-                </form>
+                {editingFavListId ? (
+                  /* Vy för att markera 1 eller flera favoriter med kryssruta och radera dem */
+                  (() => {
+                    const activeFolder = favLists.find((f) => f.id === editingFavListId);
+                    const folderItems = editingFavListId === 'ALL'
+                      ? allFavoriteItemsCombined
+                      : (favItemsById[editingFavListId] || []);
 
-                <div className="space-y-2 max-h-48 overflow-y-auto thin-scrollbar">
-                  {favLists.map((list) => {
-                    const items = favItemsById[list.id] || [];
+                    const toggleSelectId = (id) => {
+                      setSelectedFavIdsForRemoval((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(id)) next.delete(id);
+                        else next.add(id);
+                        return next;
+                      });
+                    };
+
+                    const selectAllInView = () => {
+                      if (selectedFavIdsForRemoval.size === folderItems.length) {
+                        setSelectedFavIdsForRemoval(new Set());
+                      } else {
+                        setSelectedFavIdsForRemoval(new Set(folderItems.map((x) => x.id)));
+                      }
+                    };
+
                     return (
-                      <div key={list.id} className="p-3.5 rounded-2xl bg-black/60 border border-white/10 flex justify-between items-center">
-                        <div>
-                          <span className="text-xs font-bold text-white block">
-                            ★ {list.name} ({items.length} st)
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <button
+                            onClick={() => {
+                              setEditingFavListId(null);
+                              setSelectedFavIdsForRemoval(new Set());
+                            }}
+                            className="text-xs font-bold text-[#F3D078]"
+                          >
+                            ← Tillbaka till mappar
+                          </button>
+                          <span className="text-xs font-bold text-zinc-300">
+                            {activeFolder ? `Mapp: ${activeFolder.name}` : 'Alla manuella favoriter'} ({folderItems.length} st)
                           </span>
-                          {(list.filter || (list.filterGroup && list.filterGroup !== 'ALL')) && (
-                            <span className="text-[10px] text-[#F3D078]">
-                              Regel: {list.filterGroup && list.filterGroup !== 'ALL' ? list.filterGroup : 'Alla'}{' '}
-                              {list.filter ? `+ "${list.filter}"` : ''}
-                            </span>
-                          )}
                         </div>
-                        <button onClick={() => handleDeleteFavList(list.id)} className="text-xs text-red-400 hover:text-red-300 font-bold">
-                          Ta bort
-                        </button>
+
+                        {folderItems.length > 0 ? (
+                          <>
+                            <div className="flex items-center justify-between bg-black/50 p-3 rounded-xl border border-white/10">
+                              <button
+                                type="button"
+                                onClick={selectAllInView}
+                                className="text-xs font-bold text-[#F3D078] hover:underline"
+                              >
+                                {selectedFavIdsForRemoval.size === folderItems.length ? 'Avmarkera alla' : '✓ Markera alla'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={selectedFavIdsForRemoval.size === 0}
+                                onClick={() => removeSelectedFavoritesBatch(editingFavListId)}
+                                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition ${
+                                  selectedFavIdsForRemoval.size > 0
+                                    ? 'bg-red-600 hover:bg-red-500 text-white shadow'
+                                    : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                }`}
+                              >
+                                🗑 Ta bort markerade ({selectedFavIdsForRemoval.size})
+                              </button>
+                            </div>
+
+                            <div className="space-y-2 max-h-64 overflow-y-auto thin-scrollbar pr-1">
+                              {folderItems.map((it) => {
+                                const isChecked = selectedFavIdsForRemoval.has(it.id);
+                                return (
+                                  <div
+                                    key={it.id}
+                                    onClick={() => toggleSelectId(it.id)}
+                                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                                      isChecked ? 'bg-red-950/40 border-red-500/60' : 'bg-black/60 border-white/10 hover:border-white/25'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => {}}
+                                        className="w-4 h-4 accent-[#F3D078] rounded cursor-pointer"
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-white truncate">{it.name}</p>
+                                        <p className="text-[10px] text-zinc-400 truncate">{it.group} • {it.type}</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        quickRemoveSingleFavorite(it);
+                                      }}
+                                      className="text-xs text-red-400 hover:text-red-300 font-bold px-2 py-1"
+                                    >
+                                      🗑 Ta bort
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-xs text-zinc-400 text-center py-6">Inga sparade favoriter i denna mapp ännu.</p>
+                        )}
                       </div>
                     );
-                  })}
-                </div>
+                  })()
+                ) : (
+                  <>
+                    <form onSubmit={handleCreateFavList} className="space-y-3.5 bg-black/60 p-4 rounded-2xl border border-white/10">
+                      <p className="text-xs text-[#F3D078] font-bold">Skapa ny mapp (Manuell eller Auto-regel):</p>
+                      <input
+                        type="text"
+                        placeholder="1. Namn på favoritmappen (t.ex. Sverige FHD)"
+                        value={newListName}
+                        onChange={(e) => setNewListName(e.target.value)}
+                        className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                        required
+                      />
+                      <select
+                        value={newListGroup}
+                        onChange={(e) => setNewListGroup(e.target.value)}
+                        className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                      >
+                        <option value="ALL">Alla mappar (eller välj en specifik nedan)</option>
+                        {allAvailableGroups.map((grp) => (
+                          <option key={grp} value={grp}>📁 {grp}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="3. Namn måste innehålla (valfritt, t.ex. FHD, 4K, SVT...)"
+                        value={newListFilter}
+                        onChange={(e) => setNewListFilter(e.target.value)}
+                        className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                      />
+                      <button
+                        type="submit"
+                        style={{ backgroundColor: accentColor }}
+                        className="w-full text-black font-extrabold py-2.5 rounded-xl text-xs shadow-lg"
+                      >
+                        + Skapa & Synka Smart Mapp
+                      </button>
+                    </form>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-xs font-bold text-zinc-300">Dina mappar:</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingFavListId('ALL')}
+                        className="text-xs font-extrabold text-[#F3D078] hover:underline"
+                      >
+                        🗑 Rensa / Ta bort enskilda favoriter ({allFavoriteItemsCombined.length})
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 max-h-52 overflow-y-auto thin-scrollbar">
+                      {favLists.map((list) => {
+                        const items = favItemsById[list.id] || [];
+                        return (
+                          <div key={list.id} className="p-3.5 rounded-2xl bg-black/60 border border-white/10 flex justify-between items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-white block truncate">
+                                ★ {list.name} ({items.length} st)
+                              </span>
+                              {(list.filter || (list.filterGroup && list.filterGroup !== 'ALL')) && (
+                                <span className="text-[10px] text-[#F3D078]">
+                                  Regel: {list.filterGroup && list.filterGroup !== 'ALL' ? list.filterGroup : 'Alla'}{' '}
+                                  {list.filter ? `+ "${list.filter}"` : ''}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setEditingFavListId(list.id)}
+                                className="text-xs bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] px-3 py-1.5 rounded-xl font-bold"
+                              >
+                                Hantera innehåll
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFavList(list.id)}
+                                className="text-xs text-red-400 hover:text-red-300 font-bold px-2 py-1.5"
+                              >
+                                Radera mapp
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
