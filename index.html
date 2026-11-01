@@ -17,9 +17,10 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- HLS.js & MPEGTS.js -->
+  <!-- HLS.js, MPEGTS.js & Pako (för .xml.gz EPG-uppackning i alla webbläsare) -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
   
   <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -31,7 +32,17 @@
   <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Google AdSense Script (För 'free'-versionen, byt ut ca-pub-XXXXXXXXXXXXXXXX mot ditt eget AdSense-ID) -->
+  <!-- 
+    ============================================================================
+    GUIDE FÖR GOOGLE ADSENSE & STRIPE BETALVÄGG PÅ ZAPPAPORTALEN.SE:
+    1. AdSense: Byt ut 'ca-pub-0000000000000000' nedan mot ditt Publisher ID och
+       skapa filen ads.txt i roten på GitHub Pages.
+    2. Stripe Royal: Skapa en prenumerationslänk (Payment Link) i Stripe.
+       Ställ in "After payment -> Redirect to your website" till:
+       https://zappaportalen.se/?royal_success=true
+       Då låser Zappaportalen upp Royal-kontot automatiskt direkt efter köp!
+    ============================================================================
+  -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0000000000000000" crossorigin="anonymous"></script>
 
   <style>
@@ -153,7 +164,7 @@
   <div id="root">
     <div style="height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #F3D078; font-family: sans-serif;">
       <div style="width: 56px; height: 56px; border-radius: 999px; background: #F3D078; color: #000; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 26px; margin-bottom: 14px;">Z</div>
-      <div style="font-weight: 800; font-size: 14px; letter-spacing: 2px;">STARTAR ZAPPAPORTALEN v25.4.0...</div>
+      <div style="font-weight: 800; font-size: 14px; letter-spacing: 2px;">STARTAR ZAPPAPORTALEN v26.2.0...</div>
     </div>
   </div>
 
@@ -161,15 +172,12 @@
     const { useState, useEffect, useRef, useMemo } = React;
 
     // ============================================================================
-    // PUNKT 8: ARKITEKTUR FÖR TVÅ VERSIONER AV APPEN ('free' vs 'premium')
+    // ARKITEKTUR FÖR TVÅ VERSIONER AV APPEN ('free' vs 'premium')
     // ============================================================================
-    // Sätt DEFAULT_APP_EDITION till:
-    // - 'free'    -> Gratisversion med Google AdSense-reklam, öppen för alla.
-    // - 'premium' -> Royal-version med Supabase-inloggning & Betalvägg.
     const DEFAULT_APP_EDITION = 'free'; 
     const GOOGLE_ADSENSE_CLIENT = 'ca-pub-0000000000000000'; // Byt till ditt Google AdSense Publisher ID
     const GOOGLE_ADSENSE_SLOT = '1234567890';               // Byt till ditt AdUnit Slot ID
-    const STRIPE_OR_PAYMENT_LINK = 'https://zappaportalen.se'; // Länk till din betalningssida/Swish/Stripe
+    const STRIPE_OR_PAYMENT_LINK = 'https://zappaportalen.se/?royal_success=true'; // Byt till din riktiga Stripe Payment Link!
 
     // --- SUPABASE KONFIGURATION ---
     const SUPABASE_URL = 'https://lsysoujotuheynaxzdru.supabase.co';
@@ -184,14 +192,80 @@
     }
 
     // ============================================================================
-    // PUNKT 2: AUTOMATISK KRASCHRAPPORT & FELSÖKNING (window.onerror & unhandledrejection)
+    // FLERSPRÅKSSTÖD (SVENSKA, ENGELSKA, TYSKA)
     // ============================================================================
-    const CRASH_WEBHOOK_URL = ''; // Valfri Discord/Slack/Make.com webhook URL utöver Supabase
+    const I18N = {
+      sv: {
+        home: 'För dig',
+        movies: 'Filmer',
+        series: 'Serier',
+        vod_channels: 'VOD-kanaler',
+        live: 'Live TV',
+        epg: 'TV-guide',
+        settings: 'Inställningar',
+        smartFolders: 'Smarta Mappar',
+        playNow: 'Spela upp',
+        continueWatching: 'Fortsätt att titta',
+        recentlyAddedMovies: 'Nyligen tillagda filmer',
+        recentlyAddedSeries: 'Nyligen tillagda serier',
+        allChannels: 'Alla kanaler',
+        epgUnavailable: 'EPG inte tillgänglig',
+        syncingEpg: '⏳ Synkar TV-tablå...',
+        upgradeRoyal: '👑 Slippa reklam? Uppgradera till Royal!',
+        prevChannel: '⏮ Föregående kanal (CH -)',
+        nextChannel: 'Nästa kanal (CH +) ⏭'
+      },
+      en: {
+        home: 'For You',
+        movies: 'Movies',
+        series: 'Series',
+        vod_channels: 'VOD Channels',
+        live: 'Live TV',
+        epg: 'TV Guide',
+        settings: 'Settings',
+        smartFolders: 'Smart Folders',
+        playNow: 'Play Now',
+        continueWatching: 'Continue Watching',
+        recentlyAddedMovies: 'Recently Added Movies',
+        recentlyAddedSeries: 'Recently Added Series',
+        allChannels: 'All Channels',
+        epgUnavailable: 'EPG not available',
+        syncingEpg: '⏳ Syncing TV Guide...',
+        upgradeRoyal: '👑 Tired of ads? Upgrade to Royal!',
+        prevChannel: '⏮ Prev Channel (CH -)',
+        nextChannel: 'Next Channel (CH +) ⏭'
+      },
+      de: {
+        home: 'Für dich',
+        movies: 'Filme',
+        series: 'Serien',
+        vod_channels: 'VOD-Kanäle',
+        live: 'Live-TV',
+        epg: 'TV-Guide',
+        settings: 'Einstellungen',
+        smartFolders: 'Smart-Ordner',
+        playNow: 'Abspielen',
+        continueWatching: 'Weiterschauen',
+        recentlyAddedMovies: 'Kürzlich hinzugefügte Filme',
+        recentlyAddedSeries: 'Kürzlich hinzugefügte Serien',
+        allChannels: 'Alle Kanäle',
+        epgUnavailable: 'EPG nicht verfügbar',
+        syncingEpg: '⏳ TV-Programm synchronisieren...',
+        upgradeRoyal: '👑 Keine Werbung? Upgrade auf Royal!',
+        prevChannel: '⏮ Vorheriger Kanal (CH -)',
+        nextChannel: 'Nächster Kanal (CH +) ⏭'
+      }
+    };
+
+    // ============================================================================
+    // AUTOMATISK KRASCHRAPPORT & FELSÖKNING
+    // ============================================================================
+    const CRASH_WEBHOOK_URL = '';
 
     async function sendCrashReport(type, message, stack = '', extra = {}) {
       try {
         const enabled = localStorage.getItem('zp_crash_reports_enabled');
-        if (enabled === 'false') return; // Respektera om användaren stängt av i inställningar
+        if (enabled === 'false') return;
 
         const payload = {
           error_type: String(type || 'error'),
@@ -201,24 +275,21 @@
           user_agent: navigator.userAgent,
           platform: navigator.platform || 'unknown',
           screen_size: `${window.innerWidth}x${window.innerHeight}`,
-          app_version: '25.4.0',
+          app_version: '26.2.0',
           extra_info: JSON.stringify(extra),
           created_at: new Date().toISOString()
         };
 
-        // Spara senaste kraschen lokalt så man kan granska den i Inställningar
         try {
           const prev = JSON.parse(localStorage.getItem('zp_local_crash_log') || '[]');
           prev.unshift(payload);
           localStorage.setItem('zp_local_crash_log', JSON.stringify(prev.slice(0, 15)));
         } catch (e) {}
 
-        // 1. Skicka till Supabase-tabellen "crash_reports"
         if (supabaseClient) {
           await supabaseClient.from('crash_reports').insert(payload);
         }
 
-        // 2. Skicka till valfri Webhook om angiven
         if (CRASH_WEBHOOK_URL) {
           fetch(CRASH_WEBHOOK_URL, {
             method: 'POST',
@@ -344,10 +415,10 @@
     // --- HJÄLPFUNKTIONER FÖR METADATA, KVALITET & PARSNING ---
     function extractMetadata(name, group, rawExtInf = '') {
       let quality = '';
-      if (/\b(4k|uhd|2160p)\b/i.test(name) || /\b(4k|uhd)\b/i.test(group)) quality = '4K';
-      else if (/\b(fhd|1080p)\b/i.test(name)) quality = 'FHD';
-      else if (/\b(hd|720p)\b/i.test(name)) quality = 'HD';
-      else if (/\b(sd)\b/i.test(name)) quality = 'SD';
+      if (/(?:^|[^a-z0-9])(4k|uhd|2160p)(?:$|[^a-z0-9])/i.test(name) || /(?:^|[^a-z0-9])(4k|uhd)(?:$|[^a-z0-9])/i.test(group)) quality = '4K';
+      else if (/(?:^|[^a-z0-9])(fhd|1080p|1080i)(?:$|[^a-z0-9])/i.test(name)) quality = 'FHD';
+      else if (/(?:^|[^a-z0-9])(hd|720p)(?:$|[^a-z0-9])/i.test(name)) quality = 'HD';
+      else if (/(?:^|[^a-z0-9])(sd|576p|480p)(?:$|[^a-z0-9])/i.test(name)) quality = 'SD';
 
       const yearMatch = name.match(/\b(19\d{2}|20[0-2]\d)\b/);
       const year = yearMatch ? yearMatch[1] : null;
@@ -374,6 +445,56 @@
       const rating = (7.0 + (Math.abs(hash) % 23) / 10).toFixed(1).replace('.', ',');
 
       return { quality, year, seriesTitle, season, episode, rating, addedTimestamp };
+    }
+
+    // ============================================================================
+    // EXAKT TOKEN- & KVALITETSMATCHNING FÖR SMARTA FAVORITMAPPAR (FHD != HD)
+    // ============================================================================
+    function escapeRegexStr(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function matchesSmartFilterRule(item, filterGroup, filterText) {
+      const itemGrp = (item.group || '').toLowerCase();
+      const itemName = (item.name || '').toLowerCase();
+      const itemQuality = (item.quality || '').toUpperCase();
+      const combinedHaystack = `${itemName} ${itemGrp}`;
+
+      // 1. Grupp-matchning
+      if (filterGroup && filterGroup !== 'ALL') {
+        const fg = filterGroup.toLowerCase().trim();
+        if (itemGrp !== fg && !itemGrp.includes(fg)) return false;
+      }
+
+      // 2. Text/Kvalitets-matchning (uppdelad per ord så att "UK FHD" kräver BÅDE "UK" och exakt "FHD")
+      if (filterText && filterText.trim() !== '') {
+        const tokens = filterText.toLowerCase().trim().split(/\s+/).filter(Boolean);
+        for (const tok of tokens) {
+          if (tok === 'fhd' || tok === '1080p') {
+            // Krav: Måste vara exakt FHD (inte vanlig HD!)
+            const isExactFhd = itemQuality === 'FHD' || /(?:^|[^a-z0-9])(fhd|1080p|1080i)(?:$|[^a-z0-9])/i.test(combinedHaystack);
+            if (!isExactFhd) return false;
+          } else if (tok === 'hd' || tok === '720p') {
+            // Krav: Måste vara exakt HD (inte FHD!)
+            const isExactHd = itemQuality === 'HD' || /(?:^|[^a-z0-9])(hd|720p)(?:$|[^a-z0-9])/i.test(combinedHaystack);
+            if (!isExactHd) return false;
+          } else if (tok === '4k' || tok === 'uhd' || tok === '2160p') {
+            const isExact4k = itemQuality === '4K' || /(?:^|[^a-z0-9])(4k|uhd|2160p)(?:$|[^a-z0-9])/i.test(combinedHaystack);
+            if (!isExact4k) return false;
+          } else if (tok === 'sd') {
+            const isExactSd = itemQuality === 'SD' || /(?:^|[^a-z0-9])(sd)(?:$|[^a-z0-9])/i.test(combinedHaystack);
+            if (!isExactSd) return false;
+          } else if (tok.length <= 3) {
+            // Korta landskoder/ord som "uk", "se", "us", "vip" matchas som egna ord så "uk" inte matchar "luke"
+            const wordBoundaryRegex = new RegExp(`(?:^|[^a-z0-9åäö])${escapeRegexStr(tok)}(?:$|[^a-z0-9åäö])`, 'i');
+            if (!wordBoundaryRegex.test(combinedHaystack)) return false;
+          } else {
+            if (!combinedHaystack.includes(tok)) return false;
+          }
+        }
+      }
+
+      return true;
     }
 
     function parseXmltvDate(dateStr) {
@@ -404,24 +525,40 @@
       return d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
     }
 
-    // --- ROBUST XMLTV-PARSER (STÖDJER BÅDE DISPLAY-NAME OCH CHANNEL-ID) ---
+    function normalizeChannelKey(str) {
+      if (!str) return '';
+      return str
+        .toLowerCase()
+        .replace(/^(se|swe|no|dk|fi|uk|us|vip|sport|nordic)[\s:|\-_]+/gi, '')
+        .replace(/\b(fhd|uhd|4k|hd|sd|hevc|50fps|raw|se|swe|sweden|backup)\b/gi, '')
+        .replace(/\[.*?\]|\(.*?\)/g, '')
+        .replace(/[^a-z0-9åäö]/g, '')
+        .trim();
+    }
+
     function parseXMLTV(xmlText) {
       if (!xmlText || typeof xmlText !== 'string') return {};
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
       const epgMap = {};
 
-      // Mappa även kanal-elementens display-name -> channel id så fler kanaler matchar
       const channelEls = xmlDoc.getElementsByTagName('channel');
       const idAliases = {};
       for (let i = 0; i < channelEls.length; i++) {
         const chEl = channelEls[i];
         const idAttr = (chEl.getAttribute('id') || '').toLowerCase().trim();
         if (!idAttr) continue;
+        const normId = normalizeChannelKey(idAttr.split('.')[0]);
+        if (normId) idAliases[normId] = idAttr;
+
         const dispEls = chEl.getElementsByTagName('display-name');
         for (let j = 0; j < dispEls.length; j++) {
           const dispName = (dispEls[j].textContent || '').toLowerCase().trim();
-          if (dispName) idAliases[dispName] = idAttr;
+          if (dispName) {
+            idAliases[dispName] = idAttr;
+            const normDisp = normalizeChannelKey(dispName);
+            if (normDisp) idAliases[normDisp] = idAttr;
+          }
         }
       }
 
@@ -453,9 +590,10 @@
 
       Object.keys(epgMap).forEach((chId) => {
         epgMap[chId].sort((a, b) => a.start - b.start);
+        const norm = normalizeChannelKey(chId.split('.')[0]);
+        if (norm && !epgMap[norm]) epgMap[norm] = epgMap[chId];
       });
 
-      // Kopiera över alias så kanaler som bara matchar på display-name också hittar sin EPG
       Object.entries(idAliases).forEach(([aliasName, targetId]) => {
         if (epgMap[targetId] && !epgMap[aliasName]) {
           epgMap[aliasName] = epgMap[targetId];
@@ -465,7 +603,6 @@
       return epgMap;
     }
 
-    // --- SEPARERAD M3U-PARSER: SKILJER PÅ LIVE TV, VOD-KANALER, FILMER & SERIER ---
     function parseM3U(content) {
       const lines = content.split('\n');
       const live = [];
@@ -608,8 +745,8 @@
       return { live, vodChannels, movies, series, detectedEpgUrl };
     }
 
-    // --- GOOGLE ADSENSE BANNER KOMPONENT (FÖR GRATIS-VERSIONEN) ---
-    function GoogleAdBanner({ position = 'bottom' }) {
+    // --- GOOGLE ADSENSE BANNER KOMPONENT ---
+    function GoogleAdBanner({ position = 'bottom', onUpgradeClick }) {
       useEffect(() => {
         try {
           if (window.adsbygoogle) {
@@ -619,36 +756,96 @@
       }, []);
 
       return (
-        <div className={`mx-4 sm:mx-8 my-3 rounded-2xl bg-[#0D0E11] border border-white/10 p-3 flex flex-col items-center justify-center relative overflow-hidden ${position === 'top' ? 'mt-2' : ''}`}>
-          <div className="flex items-center justify-between w-full max-w-4xl mb-1 px-1">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Sponsrad Annons • Zappaportalen Gratisversion</span>
-            <span className="text-[9px] text-[#F3D078]/80 font-semibold">Byt till Royal för reklamfritt</span>
+        <div className={`mx-4 sm:mx-8 my-3 rounded-2xl bg-gradient-to-r from-[#1A1405] via-[#0D0E11] to-[#1A1405] border-2 border-[#F3D078]/40 p-3.5 flex flex-col items-center justify-center relative overflow-hidden shadow-[0_0_25px_rgba(243,208,120,0.15)] ${position === 'top' ? 'mt-3' : ''}`}>
+          <div className="flex flex-wrap items-center justify-between w-full max-w-4xl mb-2 px-1 gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#F3D078] flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#F3D078] live-dot" />
+              Sponsrad Reklam • Zappaportalen Gratisversion
+            </span>
+            {onUpgradeClick && (
+              <button
+                onClick={onUpgradeClick}
+                className="bg-[#F3D078] hover:brightness-110 text-black text-[10px] font-black uppercase px-3 py-1 rounded-full shadow transition"
+              >
+                👑 Köp Royal – Ta bort all reklam & zapp-spärrar direkt!
+              </button>
+            )}
           </div>
-          <div className="w-full max-w-4xl min-h-[60px] bg-black/60 rounded-xl border border-white/5 flex items-center justify-center px-4 py-2 text-center">
+          <div className="w-full max-w-4xl min-h-[65px] bg-black/80 rounded-xl border border-white/10 flex items-center justify-center px-4 py-2 text-center relative">
             <ins
               className="adsbygoogle"
-              style={{ display: 'block', width: '100%', minHeight: '50px' }}
+              style={{ display: 'block', width: '100%', minHeight: '55px' }}
               data-ad-client={GOOGLE_ADSENSE_CLIENT}
               data-ad-slot={GOOGLE_ADSENSE_SLOT}
               data-ad-format="auto"
               data-full-width-responsive="true"
             />
-            <span className="text-xs text-zinc-500 pointer-events-none select-none">
-              Google AdSense Annonsplats (Aktiveras automatiskt på zappaportalen.se)
+            <span className="text-xs text-zinc-400 pointer-events-none select-none font-semibold">
+              📢 Trött på reklamavbrott när du zappar? Uppgradera till <strong className="text-[#F3D078]">Zappaportalen Royal</strong> för omedelbar zappning & 100 % reklamfritt!
             </span>
           </div>
         </div>
       );
     }
 
-    // --- PROFFSIG BILDKOMPONENT UTAN ÖVERDRIVEN ZOOM ---
-    function SmartMediaImage({ src, alt, fallbackIcon = '🎬', mode = 'poster' }) {
-      const [imgErr, setImgErr] = useState(false);
+    // --- OFFICIELLA AFFISCHER FÖR FILMER & SERIER ---
+    const posterCacheMemory = {};
 
-      if (!src || imgErr) {
+    function cleanMediaTitleForPoster(rawTitle) {
+      if (!rawTitle) return '';
+      return rawTitle
+        .replace(/^(se|swe|en|eng|no|dk|fi|nordic|vip|4k|uhd|fhd|hd)[\s:|\-_]+/gi, '')
+        .replace(/s\d{1,2}\s*e\d{1,3}.*$/i, '')
+        .replace(/\b(19\d{2}|20[0-2]\d)\b.*$/i, '')
+        .replace(/\[.*?\]|\(.*?\)/g, '')
+        .replace(/\b(4k|uhd|fhd|1080p|720p|hevc|x264|x265|bluray|web-dl|swesub|multi)\b/gi, '')
+        .replace(/[._\-]+/g, ' ')
+        .trim();
+    }
+
+    function SmartMediaImage({ src, alt, fallbackIcon = '🎬', mode = 'poster', itemType = 'movies' }) {
+      const [imgErr, setImgErr] = useState(false);
+      const [officialPoster, setOfficialPoster] = useState(null);
+
+      useEffect(() => {
+        if ((itemType !== 'movies' && itemType !== 'series') || (src && !imgErr)) return;
+        const cleanTitle = cleanMediaTitleForPoster(alt);
+        if (!cleanTitle || cleanTitle.length < 2) return;
+
+        if (posterCacheMemory[cleanTitle]) {
+          setOfficialPoster(posterCacheMemory[cleanTitle]);
+          return;
+        }
+
+        let isCancelled = false;
+        const entity = itemType === 'series' ? 'tvSeason' : 'movie';
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle)}&entity=${entity}&limit=1`)
+          .then((r) => r.json())
+          .then((data) => {
+            if (isCancelled) return;
+            const art = data?.results?.[0]?.artworkUrl100;
+            if (art) {
+              const hiRes = art.replace('100x100bb', '600x900bb');
+              posterCacheMemory[cleanTitle] = hiRes;
+              setOfficialPoster(hiRes);
+            }
+          })
+          .catch(() => {});
+
+        return () => { isCancelled = true; };
+      }, [src, imgErr, alt, itemType]);
+
+      const activeSrc = !imgErr && src ? src : officialPoster;
+
+      if (!activeSrc) {
         return (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-b from-zinc-800/40 to-black">
-            <span className="text-3xl mb-1.5 opacity-45">{fallbackIcon}</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-zinc-900 via-[#121318] to-black border-inner border-white/5">
+            <div className="w-11 h-11 rounded-full bg-[#F3D078]/10 border border-[#F3D078]/30 flex items-center justify-center mb-2 shadow-inner">
+              <span className="text-xl">{fallbackIcon}</span>
+            </div>
+            <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider line-clamp-2 px-1">
+              {cleanMediaTitleForPoster(alt) || alt || 'Zappaportalen'}
+            </span>
           </div>
         );
       }
@@ -656,13 +853,13 @@
       return (
         <div className="absolute inset-0 w-full h-full overflow-hidden bg-[#0A0B0E] flex items-center justify-center">
           <img
-            src={src}
+            src={activeSrc}
             alt=""
             aria-hidden="true"
             className="absolute inset-0 w-full h-full object-cover blur-xl opacity-35 scale-110 pointer-events-none"
           />
           <img
-            src={src}
+            src={activeSrc}
             alt={alt || ''}
             loading="lazy"
             onError={() => setImgErr(true)}
@@ -671,7 +868,7 @@
                 ? 'object-contain p-3'
                 : mode === 'landscape'
                 ? 'object-contain p-1.5'
-                : 'object-contain p-0.5'
+                : 'object-cover'
             }`}
           />
         </div>
@@ -743,7 +940,7 @@
                         {idx + 1}
                       </span>
                       <div className="relative z-10 w-28 sm:w-36 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 border border-white/15 group-hover:border-[#F3D078] transition shadow-2xl">
-                        <SmartMediaImage src={item.logo} alt={item.name} mode="poster" />
+                        <SmartMediaImage src={item.logo} alt={item.seriesTitle || item.name} mode="poster" itemType={item.type} />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent z-10" />
                         <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-col items-center text-center">
                           <p className="text-[10px] font-bold text-white line-clamp-1 mb-1">{item.seriesTitle || item.name}</p>
@@ -829,7 +1026,7 @@
                       onClick={() => onSelect(item)}
                       className="shrink-0 w-64 sm:w-72 aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-white/10 hover:border-[#F3D078] relative cursor-pointer group transition shadow-xl"
                     >
-                      <SmartMediaImage src={item.logo} alt={item.name} mode="landscape" />
+                      <SmartMediaImage src={item.logo} alt={item.name} mode="landscape" itemType={item.type} />
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
 
                       <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
@@ -867,13 +1064,13 @@
                   >
                     <SmartMediaImage
                       src={item.logo}
-                      alt={item.name}
+                      alt={item.seriesTitle || item.name}
                       fallbackIcon={item.type === 'series' ? '🍿' : '🎬'}
                       mode="poster"
+                      itemType={item.type}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent opacity-95 z-10" />
 
-                    {/* Snabbknappar uppe i hörnet: Stjärna + Snabb-radera om i favoritrad */}
                     <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
                       {onQuickRemoveFav && (
                         <button
@@ -924,12 +1121,32 @@
 
     // --- HUVUDAPPLIKATION ---
     function App() {
-      // Tillåt växling av APP_EDITION ('free' vs 'premium') för test & produktion
       const [appEdition, setAppEdition] = useState(() => {
         try { return localStorage.getItem('zp_app_edition') || DEFAULT_APP_EDITION; } catch (e) { return DEFAULT_APP_EDITION; }
       });
-      const [isSubscriber, setIsSubscriber] = useState(true); // Styrd av Supabase user_settings i 'premium'-läge
+      const [isSubscriber, setIsSubscriber] = useState(() => {
+        try { return localStorage.getItem('zp_is_subscriber') === 'true'; } catch (e) { return false; }
+      });
       const [paywallModal, setPaywallModal] = useState(false);
+
+      // Zapp-räknare & 5-sekunders Reklampaus vid zappning i gratisversionen
+      const [zapCounter, setZapCounter] = useState(0);
+      const [zapAdCountdown, setZapAdCountdown] = useState(0);
+      const [pendingZapChannel, setPendingZapChannel] = useState(null);
+      const [zapBannerInfo, setZapBannerInfo] = useState(null);
+
+      // Språk (sv, en, de)
+      const [lang, setLang] = useState(() => {
+        try { return localStorage.getItem('zp_lang') || 'sv'; } catch (e) { return 'sv'; }
+      });
+      const tr = I18N[lang] || I18N.sv;
+
+      // Vattentät Juridisk Ansvarsfriskrivning vid första start
+      const [legalAccepted, setLegalAccepted] = useState(() => {
+        try { return localStorage.getItem('zp_legal_accepted_v1') === 'true'; } catch (e) { return false; }
+      });
+
+      const [annoyingAdPopup, setAnnoyingAdPopup] = useState(false);
 
       const [user, setUser] = useState(null);
       const [isSignUp, setIsSignUp] = useState(false);
@@ -948,7 +1165,7 @@
       const [watchHistory, setWatchHistory] = useState([]);
       const [watchProgress, setWatchProgress] = useState({});
 
-      // EPG & Mappväljare i TV-guide (Punkt 4 & 5)
+      // EPG & Mappväljare i TV-guide
       const [epgData, setEpgData] = useState({});
       const [epgUrl, setEpgUrl] = useState(() => {
         try { return localStorage.getItem('zp_saved_epg_url') || ''; } catch (e) { return ''; }
@@ -956,7 +1173,7 @@
       const [epgStatus, setEpgStatus] = useState('');
       const [isEpgLoading, setIsEpgLoading] = useState(false);
       const [epgSearch, setEpgSearch] = useState('');
-      const [epgSelectedFolder, setEpgSelectedFolder] = useState('ALL'); // 'ALL', 'ALL_FAV', 'FAV:id', 'GRP:name'
+      const [epgSelectedFolder, setEpgSelectedFolder] = useState('ALL');
 
       // Navigering
       const [activeTab, setActiveTab] = useState('home');
@@ -983,7 +1200,7 @@
       const [externalPlayerNotice, setExternalPlayerNotice] = useState('');
       const [quickDrawer, setQuickDrawer] = useState(false);
 
-      // Favorit-hantering & Flervalsborttagning (Punkt 7)
+      // Favorit-hantering
       const [favModalItem, setFavModalItem] = useState(null);
       const [manageFavModal, setManageFavModal] = useState(false);
       const [newListName, setNewListName] = useState('');
@@ -992,7 +1209,7 @@
       const [editingFavListId, setEditingFavListId] = useState(null);
       const [selectedFavIdsForRemoval, setSelectedFavIdsForRemoval] = useState(new Set());
 
-      // Källor, Synk mellan Dator & Mobil (Punkt 6)
+      // Källor, Synk mellan Dator & Mobil
       const [savedM3uUrl, setSavedM3uUrl] = useState(() => {
         try { return localStorage.getItem('zp_saved_m3u_url') || ''; } catch (e) { return ''; }
       });
@@ -1004,7 +1221,7 @@
       const [needsDeviceSyncReload, setNeedsDeviceSyncReload] = useState(false);
       const [settingsSubView, setSettingsSubView] = useState(null);
 
-      // Kraschrapport-inställning (Punkt 2)
+      // Kraschrapport-inställning
       const [crashReportingEnabled, setCrashReportingEnabled] = useState(() => {
         try { return localStorage.getItem('zp_crash_reports_enabled') !== 'false'; } catch (e) { return true; }
       });
@@ -1012,11 +1229,51 @@
 
       const videoRef = useRef(null);
       const [videoError, setVideoError] = useState(null);
-      const retryCountRef = useRef(0);
 
       const accentColor = accentTheme === 'aik' ? '#F3D078' : '#D4A346';
 
-      // Spara M3U- och EPG-textlänkar i localStorage direkt när användaren skriver in dem (Punkt 6)
+      // ============================================================================
+      // AUTOMATISK STRIPE RETURN-DETEKTOR (?royal_success=true)
+      // ============================================================================
+      useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('royal_success') === 'true') {
+          setIsSubscriber(true);
+          setAppEdition('premium');
+          try {
+            localStorage.setItem('zp_is_subscriber', 'true');
+            localStorage.setItem('zp_app_edition', 'premium');
+          } catch (e) {}
+          window.history.replaceState({}, document.title, window.location.pathname);
+          alert('👑 Tack för ditt köp! Zappaportalen Royal är nu aktiverat – all reklam och alla zapp-avbrott är borttagna!');
+        }
+      }, []);
+
+      // Nedräkning för 5-sekunders Zapp-reklampaus i gratisversionen
+      useEffect(() => {
+        if (zapAdCountdown <= 0) {
+          if (pendingZapChannel) {
+            const target = pendingZapChannel;
+            setPendingZapChannel(null);
+            setCurrentMedia(target);
+          }
+          return;
+        }
+        const timer = setTimeout(() => {
+          setZapAdCountdown((prev) => prev - 1);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }, [zapAdCountdown, pendingZapChannel]);
+
+      // Tidsstyrd påminnelse var 10:e minut i gratisversionen ('free')
+      useEffect(() => {
+        if (appEdition !== 'free' || isSubscriber) return;
+        const interval = setInterval(() => {
+          setAnnoyingAdPopup(true);
+        }, 10 * 60 * 1000);
+        return () => clearInterval(interval);
+      }, [appEdition, isSubscriber]);
+
       useEffect(() => {
         try {
           if (m3uUrl) localStorage.setItem('zp_saved_m3u_url', m3uUrl);
@@ -1061,13 +1318,9 @@
         };
       }, []);
 
-      // ============================================================================
-      // PUNKT 6: LADDNING AV LOKAL CACHE VS MOLNSYNKADE LÄNKAR (DATOR VS TELEFON)
-      // ============================================================================
       async function loadUserData(userId) {
         let hasLocalMedia = false;
 
-        // 1. Försök ladda den tunga mediedatan från enhetens egna IndexedDB
         const cachedMedia = await loadLocalCache(`media_${userId}`);
         if (cachedMedia && (cachedMedia.channels?.length > 2 || cachedMedia.movies?.length > 0 || cachedMedia.series?.length > 0)) {
           hasLocalMedia = true;
@@ -1096,7 +1349,6 @@
           if (cachedHistory.watchProgress) setWatchProgress(cachedHistory.watchProgress);
         }
 
-        // 2. Hämta användarens inställningar, favoritmappar och sparade M3U/EPG-länkar från Supabase
         if (!supabaseClient) return;
         try {
           const { data, error } = await supabaseClient
@@ -1109,7 +1361,6 @@
             if (Array.isArray(data.fav_lists) && data.fav_lists.length > 0) {
               setFavLists(data.fav_lists);
             } else if (data.fav_lists && typeof data.fav_lists === 'object') {
-              // Stöd för inbäddad metadata i fav_lists om kolumner saknas i Supabase
               if (Array.isArray(data.fav_lists.lists)) setFavLists(data.fav_lists.lists);
               if (data.fav_lists.m3uUrl && !m3uUrl) {
                 setM3uUrl(data.fav_lists.m3uUrl);
@@ -1130,12 +1381,17 @@
               try { localStorage.setItem('zp_saved_epg_url', data.epg_url); } catch (e) {}
             }
 
-            // Prenumerationskontroll för 'premium'-versionen (Punkt 8)
             if (typeof data.is_subscriber === 'boolean') {
               setIsSubscriber(data.is_subscriber);
+              try { localStorage.setItem('zp_is_subscriber', String(data.is_subscriber)); } catch (e) {}
+              if (data.is_subscriber) {
+                setAppEdition('premium');
+                try { localStorage.setItem('zp_app_edition', 'premium'); } catch (e) {}
+              }
+            } else if (localStorage.getItem('zp_is_subscriber') === 'true') {
+              saveToCloud(data.fav_lists || favLists, data.m3u_url || m3uUrl, data.epg_url || epgUrl, true);
             }
 
-            // Om användaren öppnar på en ny enhet (t.ex. mobilen) där länkarna finns sparade men mediedatan inte är inläst ännu:
             const cloudM3u = data.m3u_url || localStorage.getItem('zp_saved_m3u_url') || '';
             const cloudEpg = data.epg_url || localStorage.getItem('zp_saved_epg_url') || '';
             if (!hasLocalMedia && (cloudM3u || cloudEpg)) {
@@ -1147,19 +1403,18 @@
         }
       }
 
-      async function saveToCloud(lists, customM3u = m3uUrl, customEpg = epgUrl) {
+      async function saveToCloud(lists, customM3u = m3uUrl, customEpg = epgUrl, customSub = isSubscriber) {
         if (!supabaseClient || !user) return;
         try {
-          // Försök spara både fav_lists och textlänkarna m3u_url / epg_url
           const { error } = await supabaseClient.from('user_settings').upsert({
             user_id: user.id,
             fav_lists: lists,
             m3u_url: customM3u || savedM3uUrl || '',
             epg_url: customEpg || epgUrl || '',
+            is_subscriber: customSub,
             updated_at: new Date().toISOString()
           }, { onConflict: 'user_id' });
 
-          // Fallback om m3u_url/epg_url-kolumnerna inte finns i Supabase-tabellen ännu
           if (error) {
             await supabaseClient.from('user_settings').upsert({
               user_id: user.id,
@@ -1172,7 +1427,6 @@
         }
       }
 
-      // Kontrollera betalvägg innan uppspelning om appEdition === 'premium' och !isSubscriber
       const startPlayback = (item, openFull = true) => {
         if (!item) return;
         if (appEdition === 'premium' && !isSubscriber) {
@@ -1214,11 +1468,11 @@
         }
       };
 
-    // --- SMART SJÄLVUPPLÅSANDE VIDEOSPELARMOTOR (DIREKT I FÖNSTRET) ---
+      // --- 1-KLICKS DIREKUPPSPELNING I FÖNSTRET ---
       useEffect(() => {
         const video = videoRef.current;
         const rawMediaUrl = currentMedia?.url?.trim();
-        if (!video || !rawMediaUrl || !user) return;
+        if (!video || !rawMediaUrl || !user || zapAdCountdown > 0) return;
 
         setVideoError(null);
         let hls = null;
@@ -1267,38 +1521,55 @@
             m3u8Variant = url.replace(/\.ts$/i, '.m3u8');
           }
 
-          const wrapCors = (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`;
+          const wrapCors1 = (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`;
+          const wrapCors2 = (target) => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
+          const wrapCors3 = (target) => `https://thingproxy.freeboard.io/fetch/${target}`;
+
+          const isHttpOnHttps = window.location.protocol === 'https:' && url.startsWith('http://');
 
           if (engineMode === 'native' || isDirectVodFile) {
-            queue.push({ type: 'native', url });
-            queue.push({ type: 'native', url: wrapCors(url) });
+            if (!isHttpOnHttps) queue.push({ type: 'native', url });
+            queue.push({ type: 'native', url: wrapCors1(url) });
+            queue.push({ type: 'native', url: url });
             return queue;
           }
 
           if (engineMode === 'hls') {
-            if (m3u8Variant) queue.push({ type: 'hls', url: m3u8Variant });
-            queue.push({ type: 'hls', url });
-            if (m3u8Variant) queue.push({ type: 'hls', url: wrapCors(m3u8Variant) });
-            queue.push({ type: 'hls', url: wrapCors(url) });
+            if (m3u8Variant && !isHttpOnHttps) queue.push({ type: 'hls', url: m3u8Variant });
+            if (!isHttpOnHttps) queue.push({ type: 'hls', url });
+            if (m3u8Variant) {
+              queue.push({ type: 'hls', url: wrapCors1(m3u8Variant) });
+              queue.push({ type: 'hls', url: wrapCors2(m3u8Variant) });
+            }
+            queue.push({ type: 'hls', url: wrapCors1(url) });
+            queue.push({ type: 'hls', url: wrapCors2(url) });
             return queue;
           }
 
           if (engineMode === 'mpegts') {
-            queue.push({ type: 'mpegts', url });
-            queue.push({ type: 'mpegts', url: wrapCors(url) });
+            if (!isHttpOnHttps) queue.push({ type: 'mpegts', url });
+            queue.push({ type: 'mpegts', url: wrapCors1(url) });
+            queue.push({ type: 'mpegts', url: wrapCors3(url) });
             return queue;
           }
 
           if (isM3u8) {
-            queue.push({ type: 'hls', url });
-            queue.push({ type: 'hls', url: wrapCors(url) });
-            queue.push({ type: 'native', url });
+            if (!isHttpOnHttps) queue.push({ type: 'hls', url });
+            queue.push({ type: 'hls', url: wrapCors1(url) });
+            queue.push({ type: 'hls', url: wrapCors2(url) });
+            queue.push({ type: 'native', url: wrapCors1(url) });
+            if (isHttpOnHttps) queue.push({ type: 'hls', url });
           } else {
+            if (m3u8Variant) {
+              if (!isHttpOnHttps) queue.push({ type: 'hls', url: m3u8Variant });
+              queue.push({ type: 'hls', url: wrapCors1(m3u8Variant) });
+              queue.push({ type: 'hls', url: wrapCors2(m3u8Variant) });
+            }
+            if (!isHttpOnHttps) queue.push({ type: 'mpegts', url });
+            queue.push({ type: 'mpegts', url: wrapCors1(url) });
+            queue.push({ type: 'mpegts', url: wrapCors3(url) });
             if (m3u8Variant) queue.push({ type: 'hls', url: m3u8Variant });
             queue.push({ type: 'mpegts', url });
-            if (m3u8Variant) queue.push({ type: 'hls', url: wrapCors(m3u8Variant) });
-            queue.push({ type: 'mpegts', url: wrapCors(url) });
-            if (m3u8Variant) queue.push({ type: 'native', url: m3u8Variant });
             queue.push({ type: 'native', url });
           }
 
@@ -1314,7 +1585,7 @@
 
           if (currentIdx >= candidates.length) {
             setVideoError(
-              'För att spela okrypterade HTTP-kanaler direkt i fönstret: Klicka på ikonen till vänster om zappaportalen.se i adressfältet -> Webbplatsinställningar -> ändra "Osäkert innehåll" (Insecure content) till "Tillåt". Då spelas alla kanaler direkt här i rutan!'
+              'Strömmen svarar inte i webbläsaren just nu (antingen är sändningen tillfälligt nere hos leverantören eller så blockerar leverantören proxy-tunnlar). Klicka på knappen nedan för att testa strömmen direkt!'
             );
             return;
           }
@@ -1327,9 +1598,9 @@
               hls = new window.Hls({
                 enableWorker: true,
                 lowLatencyMode: true,
-                manifestLoadingTimeOut: 7000,
+                manifestLoadingTimeOut: 6500,
                 manifestLoadingMaxRetry: 1,
-                levelLoadingTimeOut: 7000
+                levelLoadingTimeOut: 6500
               });
               hls.loadSource(targetUrl);
               hls.attachMedia(video);
@@ -1377,7 +1648,7 @@
                   if (!hasStartedPlaying && !isCancelled) {
                     tryNextCandidate();
                   }
-                }, 6000);
+                }, 5500);
 
                 mpegtsPlayer.on(window.mpegts.Events.ERROR, () => {
                   clearTimeout(timeoutId);
@@ -1410,11 +1681,14 @@
           isCancelled = true;
           cleanUp();
         };
-      }, [currentMedia, user, playerEngine]);
+      }, [currentMedia, user, playerEngine, zapAdCountdown]);
+
       const getChannelEpg = (ch) => {
         if (!ch || Object.keys(epgData).length === 0) return null;
         const cleanName = ch.name.toLowerCase().replace(/\s+(hd|fhd|uhd|4k|se|uk|us|\[\-?\d+h\])$/gi, '').trim();
-        const progList = epgData[ch.tvgId] || epgData[ch.name.toLowerCase()] || epgData[cleanName];
+        const normKey = normalizeChannelKey(ch.name);
+        const normTvg = normalizeChannelKey((ch.tvgId || '').split('.')[0]);
+        const progList = epgData[ch.tvgId] || epgData[ch.name.toLowerCase()] || epgData[cleanName] || epgData[normKey] || epgData[normTvg];
         if (!progList || progList.length === 0) return null;
 
         const now = new Date();
@@ -1489,15 +1763,13 @@
         return Array.from(set);
       }, [channels, vodChannels, movies, series]);
 
-      // Inkludera även groupedSeriesCatalog så att en sparad serie (`show_...`) hittas direkt i favoritmappar!
+      // --- SMARTA FAVORITMAPPAR MED EXAKT ORD- & KVALITETSMATCHNING ---
       const favItemsById = useMemo(() => {
         const allItems = [...channels, ...vodChannels, ...movies, ...groupedSeriesCatalog, ...series];
         const map = {};
         favLists.forEach((favList) => {
           const manualSet = new Set(favList.channelIds || []);
           const hasFilter = (favList.filter && favList.filter.trim() !== '') || (favList.filterGroup && favList.filterGroup !== 'ALL');
-          const fg = (favList.filterGroup || '').toLowerCase();
-          const term = (favList.filter || '').toLowerCase().trim();
 
           const seenInFolder = new Set();
           map[favList.id] = allItems.filter((item) => {
@@ -1507,14 +1779,9 @@
               return true;
             }
             if (!hasFilter) return false;
-            // För auto-regler, undvik att lägga in alla enskilda serieavsnitt om serie-kortet redan finns
             if (item.type === 'series' && !item.isSeriesShow) return false;
 
-            const itemGrp = (item.group || '').toLowerCase();
-            const groupMatches = !fg || fg === 'all' || itemGrp === fg || itemGrp.includes(fg);
-            const termMatches = !term || item.name.toLowerCase().includes(term);
-
-            if (groupMatches && termMatches) {
+            if (matchesSmartFilterRule(item, favList.filterGroup, favList.filter)) {
               seenInFolder.add(item.id);
               return true;
             }
@@ -1544,9 +1811,6 @@
         return result;
       }, [favItemsById]);
 
-      // ============================================================================
-      // PUNKT 1: FILTRERING AV FAVORITER PER FLIK (FILMER VS SERIER VS LIVE)
-      // ============================================================================
       const movieFavoritesOnly = useMemo(() => {
         return allFavoriteItemsCombined.filter((it) => it.type === 'movies');
       }, [allFavoriteItemsCombined]);
@@ -1554,7 +1818,6 @@
       const seriesFavoritesOnly = useMemo(() => {
         const seenShows = new Set();
         const res = [];
-        // 1. Kolla serier i allFavoriteItemsCombined
         allFavoriteItemsCombined.forEach((it) => {
           if (it.type === 'series') {
             if (it.isSeriesShow) {
@@ -1563,7 +1826,6 @@
                 res.push(it);
               }
             } else {
-              // Om användaren har favoritmarkerat ett enskilt avsnitt, hitta serie-kortet
               const parentShow = groupedSeriesCatalog.find(
                 (sh) => sh.name.toLowerCase() === (it.seriesTitle || it.name).toLowerCase() || sh.episodes?.some((e) => e.id === it.id)
               );
@@ -1622,6 +1884,93 @@
         return map;
       }, [vodChannels]);
 
+      // ============================================================================
+      // ZAPP-KÖ & ÄKTA TV-KÄNSLA (CH+ / CH- & PILTANGENTER)
+      // ============================================================================
+      const currentZapPlaylist = useMemo(() => {
+        if (!currentMedia) return channels;
+        if (currentMedia.type === 'vod_channel') {
+          return selectedVodChGroup === 'ALL'
+            ? vodChannels
+            : (vodChannelGroups[selectedVodChGroup] || vodChannels);
+        }
+        if (currentMedia.type === 'live') {
+          let list = channels;
+          if (selectedLiveGroup.startsWith('FAV:')) {
+            list = (favItemsById[selectedLiveGroup.replace('FAV:', '')] || []).filter((x) => x.type === 'live' || x.type === 'vod_channel');
+          } else if (selectedLiveGroup !== 'ALL' && liveGroups[selectedLiveGroup]) {
+            list = liveGroups[selectedLiveGroup];
+          }
+          if (list.some((x) => x.id === currentMedia.id)) return list;
+          const sameGroup = liveGroups[currentMedia.group];
+          if (sameGroup && sameGroup.length > 1) return sameGroup;
+          return channels;
+        }
+        return channels;
+      }, [currentMedia, channels, vodChannels, selectedLiveGroup, selectedVodChGroup, favItemsById, liveGroups, vodChannelGroups]);
+
+      const currentZapIndex = useMemo(() => {
+        if (!currentMedia || !currentZapPlaylist.length) return -1;
+        return currentZapPlaylist.findIndex((ch) => ch.id === currentMedia.id);
+      }, [currentMedia, currentZapPlaylist]);
+
+      const zapToChannel = (directionOrItem) => {
+        if (!currentZapPlaylist.length) return;
+        let nextItem = null;
+        let nextIdx = 0;
+
+        if (typeof directionOrItem === 'number') {
+          const baseIdx = currentZapIndex !== -1 ? currentZapIndex : 0;
+          nextIdx = (baseIdx + directionOrItem + currentZapPlaylist.length) % currentZapPlaylist.length;
+          nextItem = currentZapPlaylist[nextIdx];
+        } else {
+          nextItem = directionOrItem;
+          nextIdx = currentZapPlaylist.findIndex((c) => c.id === nextItem?.id);
+        }
+
+        if (!nextItem) return;
+
+        // Visa snygg TV-OSD-banner uppe i spelaren vid zappning
+        setZapBannerInfo({
+          number: nextIdx >= 0 ? nextIdx + 1 : 1,
+          total: currentZapPlaylist.length,
+          channel: nextItem
+        });
+        setTimeout(() => {
+          setZapBannerInfo((prev) => (prev?.channel?.id === nextItem.id ? null : prev));
+        }, 3200);
+
+        // I Gratisversionen ('free'): Var 4:e zappning triggar ett 5-sekunders sponsrat zapp-avbrott!
+        if (appEdition === 'free' && !isSubscriber) {
+          const nextCount = zapCounter + 1;
+          setZapCounter(nextCount);
+          if (nextCount % 4 === 0) {
+            setPendingZapChannel(nextItem);
+            setZapAdCountdown(5);
+            return;
+          }
+        }
+
+        startPlayback(nextItem, isFullscreenPlayer);
+      };
+
+      // Stöd för fjärrkontroll / piltangenter i fullskärmsspelaren
+      useEffect(() => {
+        if (!isFullscreenPlayer || !currentMedia || (currentMedia.type !== 'live' && currentMedia.type !== 'vod_channel')) return;
+        const onKeyDown = (e) => {
+          if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) return;
+          if (e.key === 'ArrowUp' || e.key === 'ChannelUp') {
+            e.preventDefault();
+            zapToChannel(1);
+          } else if (e.key === 'ArrowDown' || e.key === 'ChannelDown') {
+            e.preventDefault();
+            zapToChannel(-1);
+          }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+      }, [isFullscreenPlayer, currentMedia, currentZapPlaylist, currentZapIndex, zapCounter, appEdition, isSubscriber]);
+
       const heroItem = useMemo(() => {
         if (activeTab === 'movies' && recentlyAddedMovies.length > 0) return recentlyAddedMovies[0];
         if (activeTab === 'series' && recentlyAddedSeries.length > 0) return recentlyAddedSeries[0];
@@ -1663,9 +2012,6 @@
         });
       };
 
-      // ============================================================================
-      // PUNKT 7: ENKEL BORTTAGNING AV 1 ELLER FLERA FAVORITER SAMTIDIGT
-      // ============================================================================
       const quickRemoveSingleFavorite = (item) => {
         if (!item) return;
         const idsToRemove = new Set([item.id]);
@@ -1721,6 +2067,19 @@
         saveToCloud(updated);
       };
 
+      const handleOAuthLogin = async (provider) => {
+        if (!supabaseClient) return alert('Supabase är inte initierat.');
+        try {
+          const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider,
+            options: { redirectTo: window.location.origin + window.location.pathname }
+          });
+          if (error) alert(`Kunde ej starta ${provider}-inloggning: ` + error.message);
+        } catch (err) {
+          alert('Fel vid social inloggning: ' + err.message);
+        }
+      };
+
       const handleAuth = async (e) => {
         e.preventDefault();
         if (!supabaseClient) return;
@@ -1733,7 +2092,7 @@
         if (isSignUp) {
           const { error } = await supabaseClient.auth.signUp({ email: emailVal, password: passVal });
           if (error) alert(error.message);
-          else alert('Konto skapat! Du kan nu logga in.');
+          else alert('Konto skapat! Du är nu inloggad.');
         } else {
           const { error } = await supabaseClient.auth.signInWithPassword({ email: emailVal, password: passVal });
           if (error) alert(error.message);
@@ -1748,9 +2107,6 @@
         setAuthModal(true);
       };
 
-      // ============================================================================
-      // PUNKT 3: FELSÖKT & FIXAD EXTERN SPELARE (VLC, POTPLAYER, IINA) & URKLIPP
-      // ============================================================================
       const downloadSingleM3U = (item = currentMedia) => {
         if (!item?.url) return;
         const cleanUrl = item.url.trim();
@@ -1783,7 +2139,6 @@
             const proto = rawUrl.startsWith('https') ? 'https' : 'http';
             targetUri = `intent://${noProto}#Intent;scheme=${proto};package=org.videolan.vlc;type=video/*;end`;
           } else {
-            // På Windows/Mac: vlc://http://...
             targetUri = `vlc://${rawUrl}`;
           }
         } else if (scheme === 'potplayer') {
@@ -1795,7 +2150,6 @@
         setExternalPlayerNotice(`Öppnar ${scheme.toUpperCase()}... (Om inget händer laddas en .m3u-fil ner som du kan dubbelklicka på)`);
         setTimeout(() => setExternalPlayerNotice(''), 4500);
 
-        // Använd osynlig A-tagg istället för window.location.href så att webbläsaren inte avbryter sidan!
         try {
           const a = document.createElement('a');
           a.href = targetUri;
@@ -1815,7 +2169,6 @@
           if (navigator.clipboard && window.isSecureContext) {
             await navigator.clipboard.writeText(textToCopy);
           } else {
-            // Fallback för HTTP / lokala enheter
             const textArea = document.createElement('textarea');
             textArea.value = textToCopy;
             textArea.style.position = 'fixed';
@@ -1833,22 +2186,19 @@
         }
       };
 
-      // ============================================================================
-      // PUNKT 4: FIXAD EPG-HANTERARE MED SPINNER, MULTI-PROXY OCH GZIP (.xml.gz) STÖD
-      // ============================================================================
       const loadEpgFromUrl = async (urlToLoad) => {
         const target = (typeof urlToLoad === 'string' ? urlToLoad : epgUrl).trim();
         if (!target) {
-          setEpgStatus('⚠️ Fyll i en giltig EPG XMLTV-länk först (eller välj en .xml-fil).');
+          setEpgStatus('⚠️ Fyll i en giltig EPG XMLTV-länk först (eller välj en .xml/.xml.gz-fil).');
           return;
         }
 
         setIsEpgLoading(true);
-        setEpgStatus('⏳ Hämtar och läser in TV-tablå (EPG)...');
+        setEpgStatus('⏳ Synkar TV-tablå (EPG)...');
         try { localStorage.setItem('zp_saved_epg_url', target); } catch (e) {}
 
         try {
-          let response = null;
+          let arrayBuf = null;
           const urlsToTry = [
             target,
             'https://corsproxy.io/?' + encodeURIComponent(target),
@@ -1859,28 +2209,22 @@
             try {
               const res = await fetch(candidate);
               if (res.ok) {
-                response = res;
-                break;
+                arrayBuf = await res.arrayBuffer();
+                if (arrayBuf && arrayBuf.byteLength > 50) break;
               }
             } catch (innerErr) {}
           }
 
-          if (!response) {
+          if (!arrayBuf) {
             throw new Error('Kunde inte nå EPG-servern via länk.');
           }
 
+          const uint8 = new Uint8Array(arrayBuf);
           let xmlText = '';
-          // Om EPG-länken är komprimerad (.gz) och webbläsaren har DecompressionStream
-          if (target.toLowerCase().endsWith('.gz') && window.DecompressionStream) {
-            try {
-              const ds = new DecompressionStream('gzip');
-              const decompressedStream = response.body.pipeThrough(ds);
-              xmlText = await new Response(decompressedStream).text();
-            } catch (gzErr) {
-              xmlText = await response.text();
-            }
+          if (uint8[0] === 0x1f && uint8[1] === 0x8b && window.pako) {
+            xmlText = window.pako.ungzip(uint8, { to: 'string' });
           } else {
-            xmlText = await response.text();
+            xmlText = new TextDecoder('utf-8').decode(uint8);
           }
 
           const parsedEpg = parseXMLTV(xmlText);
@@ -1889,12 +2233,12 @@
             setEpgData(parsedEpg);
             if (user) await saveLocalCache(`epg_${user.id}`, parsedEpg);
             saveToCloud(favLists, m3uUrl || savedM3uUrl, target);
-            setEpgStatus(`✅ EPG synkad! Laddade programtablå för ${count} kanaler.`);
+            setEpgStatus(`✅ EPG synkad! Laddade programtablå för ${count} kanaler/alias.`);
           } else {
             setEpgStatus('⚠️ EPG-filen lästes in men innehöll inga aktuella program för idag.');
           }
         } catch (err) {
-          setEpgStatus('❌ Kunde ej hämta EPG via länk (CORS-spärr hos leverantören). Ladda ner .xml-filen och välj den i steg 3 ovan!');
+          setEpgStatus('❌ Kunde ej hämta EPG via länk (CORS-spärr hos leverantören). Ladda ner .xml/.xml.gz-filen och välj den i steg 3 ovan!');
         } finally {
           setIsEpgLoading(false);
         }
@@ -1904,23 +2248,31 @@
         const file = e.target.files?.[0];
         if (!file) return;
         setIsEpgLoading(true);
-        setEpgStatus(`⏳ Läser in EPG-filen "${file.name}"...`);
+        setEpgStatus(`⏳ Synkar TV-tablå från "${file.name}"...`);
 
         setTimeout(() => {
           const reader = new FileReader();
           reader.onload = async (ev) => {
             try {
-              const parsedEpg = parseXMLTV(ev.target.result);
+              const uint8 = new Uint8Array(ev.target.result);
+              let xmlText = '';
+              if ((uint8[0] === 0x1f && uint8[1] === 0x8b) && window.pako) {
+                xmlText = window.pako.ungzip(uint8, { to: 'string' });
+              } else {
+                xmlText = new TextDecoder('utf-8').decode(uint8);
+              }
+
+              const parsedEpg = parseXMLTV(xmlText);
               const count = Object.keys(parsedEpg).length;
               if (count > 0) {
                 setEpgData(parsedEpg);
                 if (user) await saveLocalCache(`epg_${user.id}`, parsedEpg);
-                setEpgStatus(`✅ EPG klar! Tablå laddad för ${count} kanaler.`);
+                setEpgStatus(`✅ EPG klar! Tablå laddad för ${count} kanaler/alias.`);
               } else {
                 setEpgStatus('⚠️ Inga aktuella program hittades i XML-filen.');
               }
             } catch (err) {
-              setEpgStatus('❌ Kunde ej tolka XML-filen.');
+              setEpgStatus('❌ Kunde ej tolka XML/GZ-filen.');
             } finally {
               setIsEpgLoading(false);
             }
@@ -1929,7 +2281,7 @@
             setEpgStatus('❌ Fel vid läsning av fil.');
             setIsEpgLoading(false);
           };
-          reader.readAsText(file);
+          reader.readAsArrayBuffer(file);
         }, 50);
       };
 
@@ -2087,9 +2439,6 @@
 
       const activeChannelEpg = useMemo(() => getChannelEpg(currentMedia), [currentMedia, epgData]);
 
-      // ============================================================================
-      // PUNKT 5: FILTRERADE KANALER FÖR TV-GUIDENS MAPPVÄLJARE
-      // ============================================================================
       const epgFilteredChannels = useMemo(() => {
         let baseList = channels;
         if (epgSelectedFolder === 'ALL_FAV') {
@@ -2106,6 +2455,8 @@
         const q = epgSearch.toLowerCase().trim();
         return baseList.filter((ch) => ch.name.toLowerCase().includes(q) || (ch.group && ch.group.toLowerCase().includes(q)));
       }, [channels, epgSelectedFolder, liveFavoritesOnly, favItemsById, liveGroups, epgSearch]);
+
+      const isLiveOrVodCh = currentMedia && (currentMedia.type === 'live' || currentMedia.type === 'vod_channel');
 
       return (
         <div className={`w-full h-screen bg-black flex flex-col overflow-hidden text-white relative ${tvMode ? 'text-lg' : ''}`}>
@@ -2126,7 +2477,7 @@
                 <div className="hidden sm:block">
                   <span className="font-black tracking-wider text-base text-white block leading-none">ZAPPAPORTALEN</span>
                   <span className="text-[9px] font-bold tracking-widest uppercase text-[#F3D078] block mt-0.5">
-                    {appEdition === 'free' ? 'FREE AD-EDITION' : 'ROYAL EDITION'}
+                    {appEdition === 'free' && !isSubscriber ? 'FREE AD-EDITION' : 'ROYAL EDITION'}
                   </span>
                 </div>
               </div>
@@ -2134,13 +2485,13 @@
               {user && (
                 <nav className="flex items-center gap-4 sm:gap-5 overflow-x-auto no-scrollbar py-2">
                   {[
-                    { id: 'home', label: 'För dig' },
-                    { id: 'movies', label: 'Filmer', count: movies.length },
-                    { id: 'series', label: 'Serier', count: groupedSeriesCatalog.length },
-                    { id: 'vod_channels', label: 'VOD-kanaler', count: vodChannels.length },
-                    { id: 'live', label: 'Live TV', count: channels.length },
-                    { id: 'epg', label: 'TV-guide' },
-                    { id: 'settings', label: 'Inställningar' }
+                    { id: 'home', label: tr.home },
+                    { id: 'movies', label: tr.movies, count: movies.length },
+                    { id: 'series', label: tr.series, count: groupedSeriesCatalog.length },
+                    { id: 'vod_channels', label: tr.vod_channels, count: vodChannels.length },
+                    { id: 'live', label: tr.live, count: channels.length },
+                    { id: 'epg', label: tr.epg },
+                    { id: 'settings', label: tr.settings }
                   ].map((tab) => {
                     const isActive = activeTab === tab.id && !isFullscreenPlayer;
                     return (
@@ -2176,7 +2527,21 @@
             </div>
 
             {user && (
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                <select
+                  value={lang}
+                  onChange={(e) => {
+                    setLang(e.target.value);
+                    try { localStorage.setItem('zp_lang', e.target.value); } catch (err) {}
+                  }}
+                  className="bg-zinc-900 border border-white/15 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-zinc-200 outline-none cursor-pointer hover:border-[#F3D078]"
+                  title="Välj språk / Language"
+                >
+                  <option value="sv">🇸🇪 SV</option>
+                  <option value="en">🇬🇧 EN</option>
+                  <option value="de">🇩🇪 DE</option>
+                </select>
+
                 <button
                   onClick={() => setSearchModal(true)}
                   className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-sm transition"
@@ -2190,7 +2555,7 @@
                   className="hidden md:flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-[#F3D078]/30 px-3.5 py-2 rounded-full text-xs font-bold text-[#F3D078] transition"
                 >
                   <span>★</span>
-                  <span>Smarta Mappar</span>
+                  <span>{tr.smartFolders}</span>
                 </button>
 
                 <div
@@ -2211,7 +2576,15 @@
             )}
           </header>
 
-          {/* VISUELL NOTIS VID EXTERN SPELARE (VLC/POTPLAYER) */}
+          {/* GLOBAL LADDNINGSINDIKATOR VID EPG-SYNK */}
+          {isEpgLoading && (
+            <div className="bg-[#F3D078] text-black text-xs font-black py-1.5 px-4 text-center z-40 shadow flex items-center justify-center gap-2">
+              <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full spinner inline-block" />
+              <span>{tr.syncingEpg}</span>
+            </div>
+          )}
+
+          {/* VISUELL NOTIS VID EXTERN SPELARE */}
           {externalPlayerNotice && (
             <div className="bg-[#F3D078] text-black text-xs font-extrabold py-2 px-4 text-center z-40 shadow-lg flex items-center justify-center gap-3">
               <span>{externalPlayerNotice}</span>
@@ -2228,7 +2601,7 @@
           {user ? (
             <main className="flex-1 overflow-y-auto thin-scrollbar pb-28 relative z-10">
               
-              {/* BANNER FÖR NY ENHET (NÄR M3U/EPG-LÄNKAR SYNKATS FRÅN DATOR TILL TELEFON) (Punkt 6) */}
+              {/* BANNER FÖR NY ENHET */}
               {needsDeviceSyncReload && (m3uUrl || savedM3uUrl) && (
                 <div className="mx-4 sm:mx-8 mt-4 p-4 rounded-2xl bg-amber-950/70 border border-[#F3D078] flex flex-wrap items-center justify-between gap-3 shadow-lg">
                   <div className="space-y-0.5">
@@ -2256,21 +2629,50 @@
                 </div>
               )}
 
-              {/* FULLSKÄRMS- / HUVUDSPELARVY */}
+              {/* ============================================================================
+                  FULLSKÄRMS- / HUVUDSPELARVY MED ÄKTA TV-ZAPPNING (CH- / CH+) & ZAPPLISTA
+              ============================================================================ */}
               {isFullscreenPlayer && currentMedia && (
-                <div className="max-w-6xl mx-auto px-4 sm:px-8 py-4 space-y-5">
+                <div className="max-w-6xl mx-auto px-4 sm:px-8 py-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <button
-                      onClick={() => setIsFullscreenPlayer(false)}
-                      className="bg-zinc-900 hover:bg-zinc-800 border border-white/10 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition"
-                    >
-                      <span>←</span>
-                      <span>Fortsätt bläddra (Mini-player)</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsFullscreenPlayer(false)}
+                        className="bg-zinc-900 hover:bg-zinc-800 border border-white/10 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition"
+                      >
+                        <span>←</span>
+                        <span>Mini-player</span>
+                      </button>
+
+                      {/* ZAPP-KNAPPAR (CH- / CH+) DIREKT OVANFÖR SPELAREN */}
+                      {isLiveOrVodCh && currentZapPlaylist.length > 1 && (
+                        <div className="flex items-center gap-1.5 bg-[#121316] p-1 rounded-xl border border-[#F3D078]/40 shadow-lg">
+                          <button
+                            onClick={() => zapToChannel(-1)}
+                            className="bg-zinc-900 hover:bg-[#F3D078] text-white hover:text-black font-extrabold px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1"
+                            title="Pil Ner / Föregående kanal"
+                          >
+                            <span>⏮</span>
+                            <span>CH -</span>
+                          </button>
+                          <span className="text-[11px] font-black text-[#F3D078] px-2">
+                            {currentZapIndex !== -1 ? `${currentZapIndex + 1} / ${currentZapPlaylist.length}` : 'TV'}
+                          </span>
+                          <button
+                            onClick={() => zapToChannel(1)}
+                            className="bg-[#F3D078] hover:brightness-110 text-black font-extrabold px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1 shadow"
+                            title="Pil Upp / Nästa kanal"
+                          >
+                            <span>CH +</span>
+                            <span>⏭</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-xl border border-white/10">
                       {[
-                        { id: 'auto', label: 'Auto Smart' },
+                        { id: 'auto', label: 'Auto Smart (Proxy+HLS)' },
                         { id: 'mpegts', label: 'MPEG-TS (.ts)' },
                         { id: 'hls', label: 'HLS (.m3u8)' },
                         { id: 'native', label: 'HTML5 Direkt' }
@@ -2289,8 +2691,8 @@
                     </div>
                   </div>
 
-                  {/* Videospelare */}
-                  <div className="relative w-full aspect-video bg-black rounded-2xl border border-white/15 shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden">
+                  {/* Videospelare + TV OSD-Banner + Sponsrad Zapp-paus */}
+                  <div className="relative w-full aspect-video bg-black rounded-2xl border border-white/15 shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden group/player">
                     <video
                       ref={videoRef}
                       controls
@@ -2299,17 +2701,93 @@
                       onTimeUpdate={handleTimeUpdate}
                       className="w-full h-full object-contain bg-black"
                     />
-                    {videoError && (
-                      <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center space-y-4">
+
+                    {/* Flytande CH- / CH+ knappar på sidorna av videon vid hover */}
+                    {isLiveOrVodCh && currentZapPlaylist.length > 1 && zapAdCountdown <= 0 && (
+                      <>
+                        <button
+                          onClick={() => zapToChannel(-1)}
+                          title="Föregående kanal (CH -)"
+                          className="opacity-0 group-hover/player:opacity-100 transition-opacity absolute left-3 top-1/2 -translate-y-1/2 z-20 bg-black/75 hover:bg-[#F3D078] text-white hover:text-black border border-white/20 rounded-2xl px-3 py-4 flex flex-col items-center gap-1 shadow-2xl"
+                        >
+                          <span className="text-lg font-black">⏮</span>
+                          <span className="text-[10px] font-extrabold uppercase">CH -</span>
+                        </button>
+                        <button
+                          onClick={() => zapToChannel(1)}
+                          title="Nästa kanal (CH +)"
+                          className="opacity-0 group-hover/player:opacity-100 transition-opacity absolute right-3 top-1/2 -translate-y-1/2 z-20 bg-black/75 hover:bg-[#F3D078] text-white hover:text-black border border-white/20 rounded-2xl px-3 py-4 flex flex-col items-center gap-1 shadow-2xl"
+                        >
+                          <span className="text-lg font-black">⏭</span>
+                          <span className="text-[10px] font-extrabold uppercase">CH +</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* TV-OSD BANNER VID KANALBYTE */}
+                    {zapBannerInfo && zapAdCountdown <= 0 && (
+                      <div className="absolute top-4 left-4 right-4 sm:right-auto sm:min-w-[360px] z-30 bg-black/90 backdrop-blur-xl border-2 border-[#F3D078] rounded-2xl p-3.5 flex items-center gap-3.5 shadow-2xl pointer-events-none">
+                        <div className="w-12 h-12 rounded-xl bg-[#F3D078] text-black font-black text-base flex flex-col items-center justify-center shrink-0">
+                          <span className="text-[9px] uppercase leading-none">CH</span>
+                          <span>{zapBannerInfo.number}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#F3D078] block">
+                            ZAPPAR KANAL ({zapBannerInfo.number} AV {zapBannerInfo.total})
+                          </span>
+                          <h4 className="text-sm sm:text-base font-black text-white truncate">{zapBannerInfo.channel.name}</h4>
+                          <p className="text-[11px] text-zinc-300 truncate">
+                            {getChannelEpg(zapBannerInfo.channel)?.currentProg?.title || zapBannerInfo.channel.group}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 5-SEKUNDERS SPONSRAT ZAPP-AVBROTT I GRATISVERSIONEN (VAR 4:E ZAPPNING) */}
+                    {zapAdCountdown > 0 && (
+                      <div className="absolute inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center space-y-4">
+                        <span className="bg-[#F3D078] text-black text-[10px] font-black uppercase px-3 py-1 rounded-full">
+                          SPONSRAT ZAPP-AVBROTT • GRATISVERSIONEN ({zapAdCountdown} s)
+                        </span>
+                        <h3 className="text-lg sm:text-2xl font-black text-white max-w-lg">
+                          Byter till <span className="text-[#F3D078]">{pendingZapChannel?.name}</span> om {zapAdCountdown} sekunder...
+                        </h3>
+                        <p className="text-xs text-zinc-300 max-w-md">
+                          I gratisversionen visas en kort sponsrad paus var 4:e gång du zappar. Med <strong className="text-[#F3D078]">Zappaportalen Royal</strong> zappar du blixtsnabbt utan reklam!
+                        </p>
+                        <button
+                          onClick={() => {
+                            setZapAdCountdown(0);
+                            setPaywallModal(true);
+                          }}
+                          style={{ backgroundColor: accentColor }}
+                          className="text-black font-extrabold px-6 py-3 rounded-full text-xs shadow-lg hover:scale-105 transition"
+                        >
+                          👑 Lås upp Omedelbar Zappning utan reklam (Royal)
+                        </button>
+                      </div>
+                    )}
+
+                    {videoError && zapAdCountdown <= 0 && (
+                      <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center space-y-4 z-30">
                         <span className="bg-[#F3D078] text-black text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-black live-dot" />
-                          EXTERN UPPSPELNING REKOMMENDERAS
+                          RESERVSPELARE TILLGÄNGLIG
                         </span>
                         <p className="text-white font-bold text-base sm:text-lg max-w-md">
-                          Webbläsaren behöver hjälp av VLC eller extern spelare för denna kanal
+                          Strömmen kunde inte startas direkt – välj reservknapp eller zappa vidare
                         </p>
                         <p className="text-xs text-zinc-400 max-w-md">{videoError}</p>
                         <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                          {isLiveOrVodCh && (
+                            <button
+                              onClick={() => zapToChannel(1)}
+                              style={{ backgroundColor: accentColor }}
+                              className="text-black font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-lg transition"
+                            >
+                              ⏭ Zappa till nästa kanal (CH +)
+                            </button>
+                          )}
                           <button
                             onClick={() => openInExternalPlayer('vlc', currentMedia)}
                             className="bg-[#FF6B00] hover:bg-[#e55f00] text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-lg transition"
@@ -2317,27 +2795,75 @@
                             🟠 Öppna i VLC
                           </button>
                           <button
-                            onClick={() => openInExternalPlayer('potplayer', currentMedia)}
-                            className="bg-[#2B5B84] hover:bg-[#346C9C] text-white font-extrabold px-4 py-2.5 rounded-xl text-xs shadow-lg transition"
-                          >
-                            🔵 PotPlayer
-                          </button>
-                          <button
                             onClick={() => downloadSingleM3U(currentMedia)}
-                            className="bg-[#F3D078] hover:brightness-110 text-black font-extrabold px-4 py-2.5 rounded-xl text-xs transition"
+                            className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] font-extrabold px-4 py-2.5 rounded-xl text-xs border border-white/10 transition"
                           >
-                            📥 Ladda ner .m3u (Öppnas i VLC)
-                          </button>
-                          <button
-                            onClick={() => copyStreamUrl(currentMedia)}
-                            className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs border border-white/10 transition"
-                          >
-                            {copyFeedback ? '✓ Länk kopierad!' : '🔗 Kopiera strömlänk'}
+                            📥 Ladda ner .m3u
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
+
+                  {/* SNABB-ZAPPLISTA DIREKT UNDER SPELAREN FÖR MAXIMAL TV-KÄNSLA */}
+                  {isLiveOrVodCh && currentZapPlaylist.length > 1 && (
+                    <div className="bg-[#0E0F12] border border-white/10 rounded-2xl p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#F3D078] flex items-center gap-2">
+                          <span>📺 Snabb-zapplista ({currentZapPlaylist.length} kanaler i aktiv lista)</span>
+                          <span className="hidden sm:inline text-zinc-400 font-normal">• Tips: Använd Pil Upp / Pil Ner på tangentbordet för att zappa!</span>
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => zapToChannel(-1)}
+                            className="bg-zinc-800 hover:bg-[#F3D078] text-white hover:text-black font-bold px-3 py-1 rounded-lg text-[11px] transition"
+                          >
+                            {tr.prevChannel}
+                          </button>
+                          <button
+                            onClick={() => zapToChannel(1)}
+                            className="bg-[#F3D078] hover:brightness-110 text-black font-extrabold px-3 py-1 rounded-lg text-[11px] transition"
+                          >
+                            {tr.nextChannel}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 overflow-x-auto thin-scrollbar py-1">
+                        {currentZapPlaylist.slice(Math.max(0, currentZapIndex - 15), Math.max(30, currentZapIndex + 25)).map((ch) => {
+                          const active = ch.id === currentMedia.id;
+                          const chEpg = getChannelEpg(ch);
+                          return (
+                            <div
+                              key={ch.id}
+                              onClick={() => zapToChannel(ch)}
+                              className={`shrink-0 w-48 p-2.5 rounded-xl border cursor-pointer transition flex items-center gap-2.5 ${
+                                active
+                                  ? 'bg-[#F3D078]/15 border-[#F3D078] shadow-[0_0_15px_rgba(243,208,120,0.25)]'
+                                  : 'bg-black/60 border-white/10 hover:border-white/30'
+                              }`}
+                            >
+                              <div className="w-9 h-9 rounded-lg bg-black border border-white/10 flex items-center justify-center p-1 shrink-0">
+                                {ch.logo ? (
+                                  <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                                ) : (
+                                  <span className="text-[9px] font-black text-[#F3D078]">TV</span>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs font-extrabold truncate ${active ? 'text-[#F3D078]' : 'text-white'}`}>
+                                  {ch.name}
+                                </p>
+                                <p className="text-[10px] text-zinc-400 truncate">
+                                  {chEpg?.currentProg ? chEpg.currentProg.title : ch.group}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Kanal- / Film-metadata under spelaren */}
                   <div className="bg-[#111215] border border-white/10 rounded-2xl p-5 space-y-4">
@@ -2393,13 +2919,7 @@
                           onClick={() => openInExternalPlayer('vlc', currentMedia)}
                           className="bg-[#FF6B00] hover:brightness-110 text-white px-4 py-2.5 rounded-xl text-xs font-extrabold transition"
                         >
-                          🟠 Öppna i VLC
-                        </button>
-                        <button
-                          onClick={() => downloadSingleM3U(currentMedia)}
-                          className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] px-4 py-2.5 rounded-xl text-xs font-extrabold border border-white/10 transition"
-                        >
-                          📥 .m3u-fil
+                          🟠 Reserv: VLC
                         </button>
                         <button
                           onClick={() => copyStreamUrl(currentMedia)}
@@ -2413,7 +2933,7 @@
                 </div>
               )}
 
-              {/* EXPANDERAD KATEGORI-VY (MED STÖD FÖR FLERVALS-BORTTAGNING OM DET ÄR EN FAVORITVY) */}
+              {/* EXPANDERAD KATEGORI-VY */}
               {!isFullscreenPlayer && expandedCategory && (
                 <div className="px-4 sm:px-8 py-6 space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
@@ -2448,7 +2968,7 @@
                         onClick={() => handleCardSelect(item)}
                         className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#F3D078] cursor-pointer transition hover:scale-[1.015] flex flex-col justify-end"
                       >
-                        <SmartMediaImage src={item.logo} alt={item.name} mode="poster" />
+                        <SmartMediaImage src={item.logo} alt={item.seriesTitle || item.name} mode="poster" itemType={item.type} />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent z-10" />
                         {expandedCategory.isFavoriteView && (
                           <button
@@ -2494,26 +3014,10 @@
                   {/* HERO-BANNER */}
                   {heroItem && (
                     <div className="relative w-full h-[360px] sm:h-[430px] flex flex-col justify-end overflow-hidden border-b border-white/5 bg-black">
-                      {heroItem.logo ? (
-                        <>
-                          <img
-                            src={heroItem.logo}
-                            alt=""
-                            aria-hidden="true"
-                            className="absolute inset-0 w-full h-full object-cover object-center blur-2xl opacity-35 scale-105"
-                          />
-                          <img
-                            src={heroItem.logo}
-                            alt={heroItem.name}
-                            className="absolute inset-0 w-full h-full object-contain object-center opacity-80 p-4"
-                          />
-                        </>
-                      ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-amber-950/60 via-zinc-900 to-black" />
-                      )}
-                      <div className="absolute inset-0 hero-vignette" />
+                      <SmartMediaImage src={heroItem.logo} alt={heroItem.seriesTitle || heroItem.name} mode="landscape" itemType={heroItem.type} />
+                      <div className="absolute inset-0 hero-vignette z-10" />
 
-                      <div className="relative z-10 max-w-3xl mx-auto w-full px-6 pb-8 text-center space-y-3.5">
+                      <div className="relative z-20 max-w-3xl mx-auto w-full px-6 pb-8 text-center space-y-3.5">
                         <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-[0_6px_25px_rgba(0,0,0,0.95)] line-clamp-2">
                           {heroItem.seriesTitle || heroItem.name}
                         </h1>
@@ -2555,7 +3059,7 @@
                             className="hover:brightness-110 text-black font-extrabold px-8 py-3.5 rounded-full text-sm flex items-center gap-2.5 shadow-[0_10px_30px_rgba(243,208,120,0.3)] hover:scale-105 transition"
                           >
                             <span>▶</span>
-                            <span>Spela upp</span>
+                            <span>{tr.playNow}</span>
                           </button>
 
                           <button
@@ -2570,8 +3074,8 @@
                     </div>
                   )}
 
-                  {/* GOOGLE ADSENSE I GRATISVERSIONEN (Punkt 8) */}
-                  {appEdition === 'free' && <GoogleAdBanner position="top" />}
+                  {/* GOOGLE ADSENSE I GRATISVERSIONEN */}
+                  {appEdition === 'free' && !isSubscriber && <GoogleAdBanner position="top" onUpgradeClick={() => setPaywallModal(true)} />}
 
                   {channels.length <= 2 && movies.length === 0 && series.length === 0 && vodChannels.length === 0 && (
                     <div className="mx-4 sm:mx-8 p-6 rounded-2xl bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 border border-[#F3D078]/30 flex flex-wrap items-center justify-between gap-4">
@@ -2593,20 +3097,18 @@
                   {/* RAD 1: FORTSÄTT ATT TITTA */}
                   {watchHistory.length > 0 && (
                     <MediaCarouselRow
-                      title="Fortsätt att titta"
+                      title={tr.continueWatching}
                       items={watchHistory}
                       type="landscape"
                       onSelect={handleCardSelect}
                       onFavClick={setFavModalItem}
                       favItemIds={allFavoritedIds}
                       watchProgressMap={watchProgress}
-                      onExpand={() => setExpandedCategory({ title: 'Fortsätt att titta', items: watchHistory })}
+                      onExpand={() => setExpandedCategory({ title: tr.continueWatching, items: watchHistory })}
                     />
                   )}
 
-                  {/* ============================================================================
-                      PUNKT 1 & 7: FAVORITER FILTRERADE PER FLIK (FILM vs SERIER vs ALLA) + SNABBRADERING
-                  ============================================================================ */}
+                  {/* FAVORITER FILTRERADE PER FLIK */}
                   {activeTab === 'movies' && movieFavoritesOnly.length > 0 && (
                     <MediaCarouselRow
                       title="Favoriter – Filmer"
@@ -2649,35 +3151,35 @@
                     />
                   )}
 
-                  {/* RAD 3: NYLIGEN TILLAGDA FILMER (SORTERADE EFTER UPPLADDNINGSTID) */}
+                  {/* RAD 3: NYLIGEN TILLAGDA FILMER */}
                   {(activeTab === 'home' || activeTab === 'movies') && recentlyAddedMovies.length > 0 && (
                     <MediaCarouselRow
-                      title="Nyligen tillagda filmer"
+                      title={tr.recentlyAddedMovies}
                       subtitle="Sorterade efter uppladdningstid – senaste filmen först"
                       items={recentlyAddedMovies.slice(0, 35)}
                       type="poster"
                       onSelect={handleCardSelect}
                       onFavClick={setFavModalItem}
                       favItemIds={allFavoritedIds}
-                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda filmer (Senaste först)', items: recentlyAddedMovies })}
+                      onExpand={() => setExpandedCategory({ title: tr.recentlyAddedMovies, items: recentlyAddedMovies })}
                     />
                   )}
 
-                  {/* RAD 4: NYLIGEN TILLAGDA SERIER (SORTERADE EFTER SENASTE UPPLADDADE AVSNITT) */}
+                  {/* RAD 4: NYLIGEN TILLAGDA SERIER */}
                   {(activeTab === 'home' || activeTab === 'series') && recentlyAddedSeries.length > 0 && (
                     <MediaCarouselRow
-                      title="Nyligen tillagda serier"
+                      title={tr.recentlyAddedSeries}
                       subtitle="Sorterade efter senaste uppladdade avsnitt"
                       items={recentlyAddedSeries.slice(0, 35)}
                       type="poster"
                       onSelect={handleCardSelect}
                       onFavClick={setFavModalItem}
                       favItemIds={allFavoritedIds}
-                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda serier (Senaste först)', items: recentlyAddedSeries })}
+                      onExpand={() => setExpandedCategory({ title: tr.recentlyAddedSeries, items: recentlyAddedSeries })}
                     />
                   )}
 
-                  {/* RAD 5: VOD-KANALER (SEPARERADE FRÅN FILMER) */}
+                  {/* RAD 5: VOD-KANALER */}
                   {activeTab === 'home' && vodChannels.length > 0 && (
                     <MediaCarouselRow
                       title="VOD-kanaler & 24/7"
@@ -2786,13 +3288,14 @@
                       />
                     ))}
 
-                  {appEdition === 'free' && <GoogleAdBanner position="bottom" />}
+                  {appEdition === 'free' && !isSubscriber && <GoogleAdBanner position="bottom" onUpgradeClick={() => setPaywallModal(true)} />}
                 </div>
               )}
 
               {/* 2. SEPARAT FLIK: VOD-KANALER */}
               {!isFullscreenPlayer && !expandedCategory && activeTab === 'vod_channels' && (
                 <div className="px-4 sm:px-8 py-5 space-y-6">
+                  {appEdition === 'free' && !isSubscriber && <GoogleAdBanner position="top" onUpgradeClick={() => setPaywallModal(true)} />}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
@@ -2803,7 +3306,7 @@
                         onClick={() => setManageFavModal(true)}
                         className="text-xs font-extrabold text-[#F3D078] bg-[#F3D078]/10 border border-[#F3D078]/30 px-3.5 py-2 rounded-xl"
                       >
-                        ★ Smarta Mappar
+                        ★ {tr.smartFolders}
                       </button>
                     </div>
 
@@ -2927,9 +3430,10 @@
               {/* 3. FLIK: LIVE TV */}
               {!isFullscreenPlayer && !expandedCategory && activeTab === 'live' && (
                 <div className="px-4 sm:px-8 py-5 space-y-6">
+                  {appEdition === 'free' && !isSubscriber && <GoogleAdBanner position="top" onUpgradeClick={() => setPaywallModal(true)} />}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h1 className="text-xl sm:text-2xl font-black text-white">Live TV ({channels.length} kanaler)</h1>
+                      <h1 className="text-xl sm:text-2xl font-black text-white">{tr.live} ({channels.length} kanaler)</h1>
                       <button
                         onClick={() => setManageFavModal(true)}
                         className="text-xs font-extrabold text-[#F3D078] bg-[#F3D078]/10 border border-[#F3D078]/30 px-3.5 py-2 rounded-xl"
@@ -2946,7 +3450,7 @@
                           selectedLiveGroup === 'ALL' ? 'text-black' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
                         }`}
                       >
-                        Alla kanaler ({channels.length})
+                        {tr.allChannels} ({channels.length})
                       </button>
 
                       {favLists.map((fl) => (
@@ -3030,7 +3534,7 @@
                                         e.stopPropagation();
                                         openInExternalPlayer('vlc', ch);
                                       }}
-                                      title="Öppna direkt i VLC"
+                                      title="Öppna i VLC (Reserv)"
                                       className="px-2 py-1 rounded-lg bg-[#FF6B00] text-white text-[10px] font-extrabold"
                                     >
                                       VLC
@@ -3062,7 +3566,7 @@
                                       </div>
                                     </>
                                   ) : (
-                                    <p className="text-[11px] text-zinc-500">EPG inte tillgänglig</p>
+                                    <p className="text-[11px] text-zinc-500">{tr.epgUnavailable}</p>
                                   )}
                                 </div>
                               </div>
@@ -3084,9 +3588,7 @@
                 </div>
               )}
 
-              {/* ============================================================================
-                  4. FLIK: TV-GUIDE MED MAPPVÄLJARE FÖR FAVORITER & KATEGORIER (PUNKT 4 & 5)
-              ============================================================================ */}
+              {/* 4. FLIK: TV-GUIDE MED MAPPVÄLJARE */}
               {!isFullscreenPlayer && activeTab === 'epg' && (
                 <div className="max-w-5xl mx-auto px-4 sm:px-8 py-4 space-y-5">
                   <div className="rounded-2xl bg-[#0B0C0E] border border-white/15 overflow-hidden shadow-2xl">
@@ -3107,10 +3609,16 @@
                               ▶ Öppna i fullskärm
                             </button>
                             <button
-                              onClick={() => openInExternalPlayer('vlc', currentMedia)}
-                              className="bg-[#FF6B00] text-white font-extrabold px-4 py-2 rounded-full text-xs shadow"
+                              onClick={() => zapToChannel(-1)}
+                              className="bg-zinc-800 text-white font-extrabold px-3.5 py-2 rounded-full text-xs"
                             >
-                              🟠 VLC
+                              ⏮ CH -
+                            </button>
+                            <button
+                              onClick={() => zapToChannel(1)}
+                              className="bg-zinc-800 text-[#F3D078] font-extrabold px-3.5 py-2 rounded-full text-xs"
+                            >
+                              CH + ⏭
                             </button>
                           </div>
                         </div>
@@ -3124,7 +3632,7 @@
                         {currentMedia ? currentMedia.name : 'Ingen kanal vald'}
                       </h2>
                       <p className="text-xs sm:text-sm font-bold text-[#F3D078]">
-                        {activeChannelEpg?.currentProg ? activeChannelEpg.currentProg.title : 'EPG inte tillgänglig'}
+                        {activeChannelEpg?.currentProg ? activeChannelEpg.currentProg.title : tr.epgUnavailable}
                       </p>
                       <p className="text-xs text-zinc-500 line-clamp-2">
                         {activeChannelEpg?.currentProg?.desc || 'TV-guiden innehåller ingen information om programmet som visas just nu.'}
@@ -3132,7 +3640,6 @@
                     </div>
                   </div>
 
-                  {/* Mappväljare i TV-guiden (Punkt 5): Snabbknappar + Dropdown + Sök */}
                   <div className="bg-[#111215] border border-white/10 rounded-2xl p-4 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
@@ -3178,7 +3685,6 @@
                       </div>
                     </div>
 
-                    {/* Snabbpiller för Favoritmappar direkt i TV-guiden */}
                     <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
                       <button
                         onClick={() => setEpgSelectedFolder('ALL')}
@@ -3258,7 +3764,7 @@
                                 <span className="text-[10px] text-zinc-400">
                                   {new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
-                                <p className="text-xs sm:text-sm font-bold text-zinc-200 mt-0.5">EPG inte tillgänglig</p>
+                                <p className="text-xs sm:text-sm font-bold text-zinc-200 mt-0.5">{tr.epgUnavailable}</p>
                               </>
                             )}
                           </div>
@@ -3275,7 +3781,7 @@
                   
                   <div className="flex flex-col items-center justify-center space-y-2 pt-2">
                     <span className="bg-[#F3D078] text-black font-black text-xs sm:text-sm tracking-wider uppercase px-5 py-1.5 rounded-full shadow-[0_0_25px_rgba(243,208,120,0.4)]">
-                      {appEdition === 'free' ? 'ZAPPAPORTALEN GRATISVERSION (MED REKLAM)' : 'PRENUMERANT • ZAPPAPORTALEN ROYAL'}
+                      {appEdition === 'free' && !isSubscriber ? 'ZAPPAPORTALEN GRATISVERSION (MED REKLAM)' : 'PRENUMERANT • ZAPPAPORTALEN ROYAL'}
                     </span>
                     <span className="text-xs text-zinc-400">{user.email}</span>
                   </div>
@@ -3324,9 +3830,8 @@
                           </button>
                         </form>
 
-                        {/* PUNKT 4: FIXAD EPG-INLÄSNING VIA KNAPP OCH FIL */}
                         <div className="p-4 rounded-xl bg-black/60 border border-white/10 space-y-3">
-                          <label className="text-xs font-extrabold text-white block">3. TV-tablå / EPG (.xml-fil eller XMLTV-länk)</label>
+                          <label className="text-xs font-extrabold text-white block">3. TV-tablå / EPG (.xml eller .xml.gz-fil eller XMLTV-länk)</label>
                           <input
                             type="file"
                             accept=".xml,.gz"
@@ -3349,7 +3854,7 @@
                               className="text-black px-5 py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shrink-0 hover:brightness-110 transition"
                             >
                               {isEpgLoading && <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full spinner inline-block" />}
-                              <span>{isEpgLoading ? 'Laddar EPG...' : 'Ladda EPG'}</span>
+                              <span>{isEpgLoading ? 'Synkar TV-tablå...' : 'Ladda EPG'}</span>
                             </button>
                           </div>
                         </div>
@@ -3401,52 +3906,37 @@
                           </div>
                         </div>
 
-                        {/* Växlare för Punkt 8: Gratis (Google Reklam) vs Premium (Betalvägg) */}
                         <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-black/50 border border-white/10">
                           <div>
-                            <p className="text-sm font-bold text-white">Apputgåva (Gratis med Google Ads vs Royal Betalvägg)</p>
-                            <p className="text-xs text-zinc-400">Växla för att förhandsgranska båda versionerna</p>
+                            <p className="text-sm font-bold text-white">Apputgåva (Gratis med Reklam vs Royal)</p>
+                            <p className="text-xs text-zinc-400">Växla eller uppgradera till Royal</p>
                           </div>
                           <div className="flex gap-2">
                             <button
                               onClick={() => {
                                 setAppEdition('free');
-                                try { localStorage.setItem('zp_app_edition', 'free'); } catch (e) {}
+                                setIsSubscriber(false);
+                                try {
+                                  localStorage.setItem('zp_app_edition', 'free');
+                                  localStorage.setItem('zp_is_subscriber', 'false');
+                                } catch (e) {}
                               }}
                               className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border ${
-                                appEdition === 'free' ? 'bg-[#F3D078] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
+                                appEdition === 'free' && !isSubscriber ? 'bg-[#F3D078] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
                               }`}
                             >
-                              📢 Gratis (Google Ads)
+                              📢 Gratis (Med Reklam)
                             </button>
                             <button
-                              onClick={() => {
-                                setAppEdition('premium');
-                                try { localStorage.setItem('zp_app_edition', 'premium'); } catch (e) {}
-                              }}
+                              onClick={() => setPaywallModal(true)}
                               className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border ${
-                                appEdition === 'premium' ? 'bg-[#F3D078] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
+                                appEdition === 'premium' || isSubscriber ? 'bg-[#F3D078] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
                               }`}
                             >
-                              👑 Royal (Betalvägg)
+                              👑 Zappaportalen Royal
                             </button>
                           </div>
                         </div>
-
-                        {appEdition === 'premium' && (
-                          <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
-                            <div>
-                              <p className="text-sm font-bold text-white">Testa Betalväggs-modal (Royal)</p>
-                              <p className="text-xs text-zinc-400">Öppna betalväggen som visas för icke-prenumeranter</p>
-                            </div>
-                            <button
-                              onClick={() => setPaywallModal(true)}
-                              className="px-4 py-2 rounded-xl text-xs font-extrabold bg-[#F3D078] text-black"
-                            >
-                              Visa Betalvägg
-                            </button>
-                          </div>
-                        )}
 
                         <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
                           <div>
@@ -3465,7 +3955,6 @@
                       </div>
                     </div>
                   ) : settingsSubView === 'diagnostics' ? (
-                    /* PUNKT 2: SÄKERHETS- & KRASCHRAPPORT-VY I INSTÄLLNINGAR */
                     <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-5">
                       <div className="flex items-center justify-between border-b border-white/10 pb-3">
                         <h2 className="text-base font-extrabold text-white">🛡️ Säkerhet & Anonyma Kraschrapporter</h2>
@@ -3477,7 +3966,7 @@
                       <div className="p-4 rounded-xl bg-black/60 border border-[#F3D078]/30 space-y-2">
                         <p className="text-xs font-extrabold text-[#F3D078]">Automatisk felsökning & kvalitetssäkring</p>
                         <p className="text-xs text-zinc-300 leading-relaxed">
-                          För att vi snabbt ska kunna upptäcka och rätta till eventuella buggar skickar Zappaportalen anonymiserade kraschrapporter (felmeddelande, webbläsartyp och tidsstämpel) till tabellen <code className="text-[#F3D078]">crash_reports</code> om ett oväntat scriptfel skulle uppstå. Ingen personlig spellistedata eller lösenord inkluderas någonsin.
+                          För att vi snabbt ska kunna upptäcka och rätta till eventuella buggar skickar Zappaportalen anonymiserade kraschrapporter till tabellen <code className="text-[#F3D078]">crash_reports</code> om ett oväntat scriptfel skulle uppstå.
                         </p>
                       </div>
 
@@ -3521,10 +4010,12 @@
                   ) : (
                     <div className="bg-[#0B0C0E] border border-white/10 rounded-2xl divide-y divide-white/10 overflow-hidden shadow-2xl">
                       {[
+                        { icon: '👑', label: 'Uppgradera till Zappaportalen Royal (Reklamfritt)', action: () => setPaywallModal(true) },
                         { icon: '📋', label: 'Spellista Hantering (M3U & EPG)', action: () => setSettingsSubView('sources') },
                         { icon: '✨', label: 'Smarta Favoritmappar & Ta bort favoriter', action: () => setManageFavModal(true) },
                         { icon: '🎨', label: 'Tillägg: teman, utseende & apputgåva', action: () => setSettingsSubView('appearance') },
                         { icon: '🛡️', label: `Säkerhet & Kraschrapporter (${crashReportingEnabled ? 'PÅ' : 'AV'})`, action: () => setSettingsSubView('diagnostics') },
+                        { icon: '⚖️', label: 'Användarvillkor & Juridisk Ansvarsfriskrivning', action: () => setLegalAccepted(false) },
                         { icon: '☁️', label: 'Moln-synkronisering (Supabase Cloud)', action: () => { saveToCloud(favLists); alert('Dina Smarta Mappar och M3U/EPG-länkar är synkroniserade med molnet!'); } },
                         { icon: '▶', label: `Spelarmotor (${playerEngine.toUpperCase()})`, action: () => {
                           const order = ['auto', 'mpegts', 'hls', 'native'];
@@ -3555,7 +4046,7 @@
                   )}
 
                   <div className="text-center pt-4">
-                    <span className="text-xs text-zinc-600 font-semibold">Version 25.4.0 • Zappaportalen (zappaportalen.se)</span>
+                    <span className="text-xs text-zinc-600 font-semibold">Version 26.2.0 • Zappaportalen (zappaportalen.se)</span>
                   </div>
                 </div>
               )}
@@ -3579,12 +4070,30 @@
             </div>
           )}
 
-          {/* FLYTANDE MINI-PLAYER */}
+          {/* STICKY FOOTER-BANNER I GRATISVERSIONEN */}
+          {user && appEdition === 'free' && !isSubscriber && !isFullscreenPlayer && (
+            <div className="fixed bottom-14 sm:bottom-0 left-0 right-0 z-30 bg-gradient-to-r from-amber-500 via-[#F3D078] to-amber-500 text-black px-4 py-2 flex items-center justify-between shadow-[0_-8px_25px_rgba(0,0,0,0.85)]">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm font-black">📢 GRATISVERSION MED REKLAM</span>
+                <span className="hidden md:inline text-xs font-bold opacity-85 truncate">
+                  — Trött på reklambanners och zapp-avbrott? Köp Zappaportalen Royal för omedelbar zappning & reklamfritt!
+                </span>
+              </div>
+              <button
+                onClick={() => setPaywallModal(true)}
+                className="bg-black text-[#F3D078] font-black text-[11px] uppercase px-3.5 py-1.5 rounded-full shrink-0 shadow hover:scale-105 transition"
+              >
+                {tr.upgradeRoyal}
+              </button>
+            </div>
+          )}
+
+          {/* FLYTANDE MINI-PLAYER MED DIREKTA ZAPP-KNAPPAR (CH- / CH+) */}
           {user && currentMedia && !isFullscreenPlayer && (
-            <div className="fixed bottom-16 sm:bottom-6 left-4 sm:left-6 z-40 w-72 sm:w-80 rounded-2xl bg-[#111215]/95 backdrop-blur-xl border border-[#F3D078]/40 shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex items-center gap-3 p-2.5">
+            <div className="fixed bottom-24 sm:bottom-12 left-4 sm:left-6 z-40 w-80 sm:w-96 rounded-2xl bg-[#111215]/95 backdrop-blur-xl border border-[#F3D078]/40 shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex items-center gap-2.5 p-2.5">
               <div
                 onClick={() => setIsFullscreenPlayer(true)}
-                className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center shrink-0 cursor-pointer relative overflow-hidden"
+                className="w-11 h-11 rounded-xl bg-black border border-white/10 flex items-center justify-center shrink-0 cursor-pointer relative overflow-hidden"
               >
                 {currentMedia.logo ? (
                   <img src={currentMedia.logo} alt="" className="max-w-full max-h-full object-contain" />
@@ -3599,6 +4108,24 @@
                 </span>
                 <p className="text-xs font-extrabold text-white truncate">{currentMedia.name}</p>
               </div>
+              {isLiveOrVodCh && currentZapPlaylist.length > 1 && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => zapToChannel(-1)}
+                    className="px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-[#F3D078] text-white hover:text-black text-[10px] font-extrabold transition"
+                    title="Föregående kanal (CH -)"
+                  >
+                    ⏮
+                  </button>
+                  <button
+                    onClick={() => zapToChannel(1)}
+                    className="px-2 py-1.5 rounded-lg bg-[#F3D078] text-black text-[10px] font-extrabold transition"
+                    title="Nästa kanal (CH +)"
+                  >
+                    ⏭
+                  </button>
+                </div>
+              )}
               <button
                 onClick={() => setIsFullscreenPlayer(true)}
                 className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold"
@@ -3608,7 +4135,7 @@
               </button>
               <button
                 onClick={() => setCurrentMedia(null)}
-                className="px-2 py-1.5 text-zinc-400 hover:text-white text-xs font-bold"
+                className="px-1.5 py-1.5 text-zinc-400 hover:text-white text-xs font-bold"
                 title="Stäng"
               >
                 ✕
@@ -3621,7 +4148,7 @@
             <button
               onClick={() => setQuickDrawer(!quickDrawer)}
               style={{ backgroundColor: accentColor }}
-              className="fixed bottom-16 sm:bottom-6 right-5 z-40 w-14 h-14 rounded-full text-black flex items-center justify-center text-2xl font-black shadow-[0_8px_30px_rgba(243,208,120,0.5)] hover:scale-105 transition"
+              className="fixed bottom-24 sm:bottom-12 right-5 z-40 w-14 h-14 rounded-full text-black flex items-center justify-center text-2xl font-black shadow-[0_8px_30px_rgba(243,208,120,0.5)] hover:scale-105 transition"
               title="Snabbmeny"
             >
               {quickDrawer ? '✕' : '☰'}
@@ -3630,12 +4157,13 @@
 
           {/* SNABBMENY-POPUP */}
           {quickDrawer && (
-            <div className="fixed bottom-32 sm:bottom-24 right-5 z-40 w-64 rounded-2xl bg-[#121316]/95 backdrop-blur-xl border border-[#F3D078]/30 p-3 space-y-1.5 shadow-2xl">
+            <div className="fixed bottom-40 sm:bottom-28 right-5 z-40 w-64 rounded-2xl bg-[#121316]/95 backdrop-blur-xl border border-[#F3D078]/30 p-3 space-y-1.5 shadow-2xl">
               <div className="text-[10px] font-extrabold uppercase tracking-widest text-[#F3D078] px-3 py-1">
                 Zappaportalen Snabbval
               </div>
               {[
                 { label: '🔍 Sök i hela katalogen', action: () => { setSearchModal(true); setQuickDrawer(false); } },
+                { label: '👑 Uppgradera till Royal', action: () => { setPaywallModal(true); setQuickDrawer(false); } },
                 { label: '★ Hantera & Ta bort Favoriter', action: () => { setManageFavModal(true); setQuickDrawer(false); } },
                 { label: '📂 Ladda M3U / EPG', action: () => { setActiveTab('settings'); setSettingsSubView('sources'); setQuickDrawer(false); } },
                 { label: '🎞️ Gå till VOD-kanaler', action: () => { setActiveTab('vod_channels'); setIsFullscreenPlayer(false); setQuickDrawer(false); } },
@@ -3658,20 +4186,15 @@
             <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-50 flex items-center justify-center p-4 overflow-y-auto">
               <div className="bg-[#121316] border border-white/15 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl my-auto">
                 <div className="relative h-56 sm:h-64 bg-zinc-900 flex items-end p-6 overflow-hidden">
-                  {detailItem.logo && (
-                    <>
-                      <img src={detailItem.logo} alt="" className="absolute inset-0 w-full h-full object-cover blur-xl opacity-35" />
-                      <img src={detailItem.logo} alt="" className="absolute inset-0 w-full h-full object-contain p-3 opacity-80" />
-                    </>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#121316] via-[#121316]/50 to-transparent" />
+                  <SmartMediaImage src={detailItem.logo} alt={detailItem.name} mode="landscape" itemType={detailItem.type} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#121316] via-[#121316]/50 to-transparent z-10" />
                   <button
                     onClick={() => setDetailItem(null)}
                     className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/70 text-white flex items-center justify-center text-sm font-bold"
                   >
                     ✕
                   </button>
-                  <div className="relative z-10 space-y-2 w-full">
+                  <div className="relative z-20 space-y-2 w-full">
                     <div className="flex items-center gap-2">
                       <span style={{ backgroundColor: accentColor }} className="text-[10px] font-black uppercase px-2 py-0.5 rounded text-black">
                         {detailItem.isSeriesShow ? 'SERIE' : 'DETALJER'}
@@ -3832,7 +4355,40 @@
             </div>
           )}
 
-          {/* PUNKT 8: BETALVÄGG-MODAL FÖR ROYAL / PREMIUM-VERSIONEN */}
+          {/* IRRITERANDE 10-MINUTERS REKLAM-PÅMINNELSE I GRATISVERSIONEN */}
+          {annoyingAdPopup && appEdition === 'free' && !isSubscriber && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+              <div className="bg-[#111215] border-2 border-[#F3D078] rounded-3xl w-full max-w-md p-7 space-y-5 shadow-[0_0_60px_rgba(243,208,120,0.4)] text-center">
+                <span className="bg-[#F3D078] text-black text-[10px] font-black uppercase px-3 py-1 rounded-full">
+                  REKLAMAVBROTT • GRATISVERSIONEN
+                </span>
+                <h3 className="text-xl font-black text-white">Trött på reklam och zapp-avbrott?</h3>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Du använder just nu gratisversionen av Zappaportalen. Uppgradera till <strong className="text-[#F3D078]">Zappaportalen Royal</strong> för en månadskostnad så slipper du all reklam och zappar helt utan fördröjning!
+                </p>
+                <div className="space-y-2.5 pt-2">
+                  <button
+                    onClick={() => {
+                      setAnnoyingAdPopup(false);
+                      setPaywallModal(true);
+                    }}
+                    style={{ backgroundColor: accentColor }}
+                    className="w-full text-black font-extrabold py-3.5 rounded-2xl text-xs shadow-lg hover:brightness-110 transition"
+                  >
+                    👑 Uppgradera till Royal nu (Reklamfritt)
+                  </button>
+                  <button
+                    onClick={() => setAnnoyingAdPopup(false)}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 pt-1 block w-full"
+                  >
+                    Fortsätt med reklam i gratisversionen
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* BETALVÄGG-MODAL FÖR ROYAL / PREMIUM-VERSIONEN */}
           {paywallModal && (
             <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center p-4">
               <div className="bg-[#111215] border-2 border-[#F3D078] rounded-3xl w-full max-w-md p-7 space-y-5 shadow-[0_0_50px_rgba(243,208,120,0.3)] text-center">
@@ -3841,16 +4397,16 @@
                 </div>
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-black uppercase tracking-widest text-[#F3D078]">ZAPPAPORTALEN ROYAL</span>
-                  <h3 className="text-xl font-black text-white">Uppgradera för att låsa upp alla funktioner</h3>
+                  <h3 className="text-xl font-black text-white">Uppgradera till Royal – Helt Reklamfritt</h3>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Med Zappaportalen Royal får du helt reklamfri strömning, obegränsade Smarta Favoritmappar, automatisk molnsynk mellan dator & mobil samt full EPG-tablå.
+                    Med Zappaportalen Royal försvinner alla reklambanners och alla 5-sekunders zapp-avbrott direkt.
                   </p>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-black/60 border border-white/10 text-left space-y-2 text-xs text-zinc-200">
-                  <p>✓ 100 % Reklamfritt gränssnitt</p>
-                  <p>✓ Synka M3U, EPG & Favoriter mellan alla enheter</p>
-                  <p>✓ Direktbrygga till VLC, PotPlayer & 4K-strömmar</p>
+                  <p>✓ <strong>Omedelbar Kanalzappning (CH+ / CH-)</strong> utan reklam</p>
+                  <p>✓ 100 % Reklamfritt i hela portalen</p>
+                  <p>✓ Synka M3U, EPG & Smarta Mappar mellan alla enheter</p>
                 </div>
 
                 <div className="space-y-2.5 pt-2">
@@ -3861,16 +4417,22 @@
                     style={{ backgroundColor: accentColor }}
                     className="block w-full text-black font-extrabold py-3.5 rounded-2xl text-xs shadow-lg hover:brightness-110 transition"
                   >
-                    Lås upp Zappaportalen Royal nu
+                    💳 Prenumerera via Stripe (Månadskostnad)
                   </a>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setIsSubscriber(true);
+                      setAppEdition('premium');
+                      try {
+                        localStorage.setItem('zp_is_subscriber', 'true');
+                        localStorage.setItem('zp_app_edition', 'premium');
+                      } catch (e) {}
+                      await saveToCloud(favLists, m3uUrl, epgUrl, true);
                       setPaywallModal(false);
                     }}
                     className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-[#F3D078]"
                   >
-                    Jag har redan betalat (Aktivera Royal på detta konto)
+                    ✓ Jag har betalat – Aktivera Royal på mitt konto nu
                   </button>
                   <button
                     onClick={() => setPaywallModal(false)}
@@ -3883,7 +4445,47 @@
             </div>
           )}
 
-          {/* INLOGGNINGS-MODAL */}
+          {/* VATTENTÄT JURIDISK ANSVARSFRISKRIVNING */}
+          {!legalAccepted && (
+            <div className="fixed inset-0 bg-black/95 backdrop-blur-2xl z-[60] flex items-center justify-center p-4">
+              <div className="bg-[#111215] border-2 border-[#F3D078] rounded-3xl w-full max-w-lg p-7 space-y-5 shadow-2xl">
+                <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+                  <div className="w-10 h-10 rounded-full bg-[#F3D078] text-black font-black text-lg flex items-center justify-center shrink-0">
+                    ⚖️
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#F3D078]">JURIDISK ANSVARSFRISKRIVNING</span>
+                    <h3 className="text-base sm:text-lg font-black text-white">Användarvillkor för Zappaportalen</h3>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-black/80 border border-white/10 space-y-3 text-xs text-zinc-300 leading-relaxed max-h-64 overflow-y-auto thin-scrollbar">
+                  <p>
+                    <strong className="text-white">1. Neutral Teknisk Mediaspelare:</strong> Zappaportalen (<code className="text-[#F3D078]">zappaportalen.se</code>) är uteslutande ett neutralt, tomt tekniskt gränssnitt och mediespelarverktyg (likt VLC eller en vanlig webbläsare).
+                  </p>
+                  <p>
+                    <strong className="text-white">2. Inget Eget Innehåll:</strong> Zappaportalen tillhandahåller, säljer, hostar, lagrar eller distribuerar <strong>inga som helst egna TV-kanaler, strömmar, filmer, serier eller M3U-spellistor</strong>.
+                  </p>
+                  <p>
+                    <strong className="text-white">3. Slutanvändarens Fulla Ansvar:</strong> Utvecklarna och ägarna bakom Zappaportalen tar <strong>inget som helst juridiskt eller upphovsrättsligt ansvar</strong> för hur slutanvändaren väljer att använda spelaren eller vilket material slutanvändaren själv läser in. Genom att använda tjänsten intygar du att du har laglig rätt till de strömmar du spelar upp.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setLegalAccepted(true);
+                    try { localStorage.setItem('zp_legal_accepted_v1', 'true'); } catch (e) {}
+                  }}
+                  style={{ backgroundColor: accentColor }}
+                  className="w-full text-black font-extrabold py-3.5 rounded-2xl text-xs shadow-lg hover:brightness-110 transition"
+                >
+                  ✓ Jag har läst och godkänner villkoren
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* INLOGGNINGS-MODAL MED 1-KLICKS GOOGLE, APPLE & E-POST/LÖSENORD */}
           {authModal && (
             <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-50 flex items-center justify-center p-4">
               <div className="bg-[#111215] border border-[#F3D078]/40 rounded-3xl w-full max-w-sm p-7 space-y-5 shadow-2xl">
@@ -3899,10 +4501,29 @@
                   )}
                 </div>
 
-                <div className="p-3.5 bg-black/60 border border-white/10 rounded-2xl">
-                  <p className="text-[11px] text-zinc-400 leading-relaxed text-center">
-                    <strong className="text-[#F3D078]">Användarvillkor (zappaportalen.se):</strong> Zappaportalen tillhandahåller enbart en neutral mediaspelare. Användaren ansvarar fullt ut för att endast använda lagliga M3U-filer och strömmar.
-                  </p>
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={() => handleOAuthLogin('google')}
+                    className="w-full bg-white hover:bg-zinc-200 text-black font-extrabold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2.5 shadow transition"
+                  >
+                    <span className="font-black text-sm">G</span>
+                    <span>Fortsätt med Google (1 klick)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOAuthLogin('apple')}
+                    className="w-full bg-zinc-900 hover:bg-zinc-800 text-white border border-white/20 font-extrabold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2.5 shadow transition"
+                  >
+                    <span className="text-sm"></span>
+                    <span>Fortsätt med Apple (1 klick)</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="h-px bg-white/10 flex-1" />
+                  <span className="text-[10px] font-bold uppercase text-zinc-500">eller med e-post</span>
+                  <div className="h-px bg-white/10 flex-1" />
                 </div>
 
                 <form onSubmit={handleAuth} className="space-y-3.5" autoComplete="on">
@@ -3971,9 +4592,7 @@
             </div>
           )}
 
-          {/* ============================================================================
-              PUNKT 7: SMARTA FAVORITMAPPAR-MODAL MED KRYSSRUTOR FÖR ATT TA BORT 1 ELLER FLERA
-          ============================================================================ */}
+          {/* SMARTA FAVORITMAPPAR-MODAL */}
           {manageFavModal && (
             <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
               <div className="bg-[#121316] border border-[#F3D078]/40 rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl my-auto">
@@ -3994,7 +4613,6 @@
                 </div>
 
                 {editingFavListId ? (
-                  /* Vy för att markera 1 eller flera favoriter med kryssruta och radera dem */
                   (() => {
                     const activeFolder = favLists.find((f) => f.id === editingFavListId);
                     const folderItems = editingFavListId === 'ALL'
@@ -4106,10 +4724,10 @@
                 ) : (
                   <>
                     <form onSubmit={handleCreateFavList} className="space-y-3.5 bg-black/60 p-4 rounded-2xl border border-white/10">
-                      <p className="text-xs text-[#F3D078] font-bold">Skapa ny mapp (Manuell eller Auto-regel):</p>
+                      <p className="text-xs text-[#F3D078] font-bold">Skapa ny mapp (Exakt ord- & kvalitetsmatchning):</p>
                       <input
                         type="text"
-                        placeholder="1. Namn på favoritmappen (t.ex. Sverige FHD)"
+                        placeholder="1. Namn på favoritmappen (t.ex. UK FHD)"
                         value={newListName}
                         onChange={(e) => setNewListName(e.target.value)}
                         className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
@@ -4127,7 +4745,7 @@
                       </select>
                       <input
                         type="text"
-                        placeholder="3. Namn måste innehålla (valfritt, t.ex. FHD, 4K, SVT...)"
+                        placeholder="3. Exakta sökord (t.ex. UK FHD -> tar BARA med FHD, inte vanlig HD)"
                         value={newListFilter}
                         onChange={(e) => setNewListFilter(e.target.value)}
                         className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
@@ -4198,9 +4816,9 @@
           {user && (
             <nav className="sm:hidden fixed bottom-0 left-0 right-0 h-14 bg-black/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around z-30 px-1">
               {[
-                { id: 'home', label: 'För dig', icon: '🏠' },
-                { id: 'movies', label: 'Filmer', icon: '🎬' },
-                { id: 'series', label: 'Serier', icon: '🍿' },
+                { id: 'home', label: tr.home, icon: '🏠' },
+                { id: 'movies', label: tr.movies, icon: '🎬' },
+                { id: 'series', label: tr.series, icon: '🍿' },
                 { id: 'vod_channels', label: 'VOD-TV', icon: '🎞️' },
                 { id: 'live', label: 'Live', icon: '📺' },
                 { id: 'epg', label: 'Guide', icon: '📅' },
