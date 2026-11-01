@@ -1,61 +1,15 @@
 <!DOCTYPE html>
 <html lang="sv">
-<!-- PWA Manifest & App-Ikon (Fungerar på iOS, Android, PC & Smart-TV) -->
-  <link rel="manifest" href="manifest.json" id="pwa-manifest" />
-  <script>
-    (function() {
-      const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-        <rect width="512" height="512" rx="115" fill="#050705"/>
-        <rect x="16" y="16" width="480" height="480" rx="100" fill="none" stroke="#E50914" stroke-width="12" stroke-opacity="0.6"/>
-        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="900" font-size="260" fill="#E50914">X</text>
-        <text x="50%" y="22%" dominant-baseline="middle" text-anchor="middle" font-size="90">👑</text>
-      </svg>`;
-      const iconUrl = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgIcon);
-
-      // Sätt Apple Touch Icon för iPhone / iPad
-      const appleIcon = document.createElement('link');
-      appleIcon.rel = 'apple-touch-icon';
-      appleIcon.href = iconUrl;
-      document.head.appendChild(appleIcon);
-
-      // Sätt vanlig Favicon
-      const favIcon = document.createElement('link');
-      favIcon.rel = 'icon';
-      favIcon.href = iconUrl;
-      document.head.appendChild(favIcon);
-
-      // Skapa dynamiskt manifest om manifest.json saknas lokalt
-      const dynamicManifest = {
-        name: "MAGNERSKING - Royal IPTVX",
-        short_name: "MAGNERSKING",
-        description: "Next-Gen Cloud & Local Stream Suite",
-        start_url: "./index.html",
-        display: "standalone",
-        orientation: "any",
-        background_color: "#000000",
-        theme_color: "#000000",
-        icons: [
-          {
-            src: iconUrl,
-            sizes: "512x512",
-            type: "image/svg+xml",
-            purpose: "any maskable"
-          }
-        ]
-      };
-      const blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/json' });
-      document.getElementById('pwa-manifest').setAttribute('href', URL.createObjectURL(blob));
-    })();
-  </script>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>MAGNERSKING - IPTVX & Royal Cinema</title>
+  <meta name="apple-mobile-web-app-title" content="Zappaportalen" />
+  <title>Zappaportalen - zappaportalen.se</title>
   
-  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <!-- Google Fonts: Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -63,10 +17,8 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- HLS.js för .m3u8 videoströmmar -->
+  <!-- HLS.js & MPEGTS.js -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
-  <!-- MPEGTS.js för råa IPTV .ts-strömmar -->
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.js"></script>
   
   <!-- Supabase JS Client -->
@@ -81,8 +33,8 @@
 
   <style>
     :root {
-      --accent: #E50914;
-      --accent-gold: #F59E0B;
+      --accent: #F3D078;
+      --accent-gold: #D4A346;
     }
     * {
       box-sizing: border-box;
@@ -113,31 +65,25 @@
       background: transparent;
     }
     .thin-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
+      background: rgba(243, 208, 120, 0.25);
       border-radius: 9999px;
     }
     .thin-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: rgba(229, 9, 20, 0.8);
+      background: rgba(243, 208, 120, 0.85);
     }
-    /* Gigantiska Topp-10 siffror i Netflix/IPTVX-stil */
     .rank-number {
-      font-size: 9.5rem;
+      font-size: 8.5rem;
       line-height: 0.8;
       font-weight: 900;
       color: #000000;
-      -webkit-text-stroke: 3px #52525B;
+      -webkit-text-stroke: 2.5px #F3D078;
       text-shadow: 0 10px 30px rgba(0,0,0,0.9);
       font-family: 'Plus Jakarta Sans', sans-serif;
       letter-spacing: -0.06em;
     }
     .hero-vignette {
-      background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0.95) 85%, #000000 100%),
-                  linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, rgba(0,0,0,0.85) 100%);
-    }
-    .tv-focus:focus-visible {
-      outline: 3px solid #E50914;
-      outline-offset: 3px;
-      transform: scale(1.04);
+      background: linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0.95) 85%, #000000 100%),
+                  linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.25) 50%, rgba(0,0,0,0.9) 100%);
     }
     @keyframes pulse-live {
       0%, 100% { opacity: 1; transform: scale(1); }
@@ -147,9 +93,60 @@
       animation: pulse-live 1.8s infinite ease-in-out;
     }
   </style>
+
+  <!-- Säker PWA-laddare med Zappaportalen-ikon (Z) -->
+  <script>
+    window.addEventListener('DOMContentLoaded', function() {
+      try {
+        const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+          <rect width="512" height="512" rx="115" fill="#000000"/>
+          <circle cx="256" cy="256" r="200" fill="#F3D078" stroke="#D4A346" stroke-width="14"/>
+          <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="250" fill="#000000">Z</text>
+        </svg>`;
+        const iconUrl = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgIcon);
+
+        const appleIcon = document.createElement('link');
+        appleIcon.rel = 'apple-touch-icon';
+        appleIcon.href = iconUrl;
+        document.head.appendChild(appleIcon);
+
+        const favIcon = document.createElement('link');
+        favIcon.rel = 'icon';
+        favIcon.href = iconUrl;
+        document.head.appendChild(favIcon);
+
+        if (window.location.protocol !== 'file:') {
+          const dynamicManifest = {
+            name: "Zappaportalen - zappaportalen.se",
+            short_name: "Zappaportalen",
+            description: "Zappaportalen Stream Suite för TV, Dator och Mobil",
+            start_url: "./index.html",
+            display: "standalone",
+            orientation: "any",
+            background_color: "#000000",
+            theme_color: "#000000",
+            icons: [{ src: iconUrl, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }]
+          };
+          const blob = new Blob([JSON.stringify(dynamicManifest)], { type: 'application/json' });
+          const manifestLink = document.createElement('link');
+          manifestLink.rel = 'manifest';
+          manifestLink.href = URL.createObjectURL(blob);
+          document.head.appendChild(manifestLink);
+        }
+      } catch (e) {
+        console.warn('PWA init hoppades över lokalt:', e);
+      }
+    });
+  </script>
 </head>
 <body>
-  <div id="root"></div>
+  <!-- Laddningsskärm tills React tar över -->
+  <div id="root">
+    <div style="height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #F3D078; font-family: sans-serif;">
+      <div style="width: 56px; height: 56px; border-radius: 999px; background: #F3D078; color: #000; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 26px; margin-bottom: 14px;">Z</div>
+      <div style="font-weight: 800; font-size: 14px; letter-spacing: 2px;">STARTAR ZAPPAPORTALEN...</div>
+    </div>
+  </div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo } = React;
@@ -157,7 +154,14 @@
     // --- SUPABASE KONFIGURATION ---
     const SUPABASE_URL = 'https://lsysoujotuheynaxzdru.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_4eiiaTpWbpoNFsqZsP8rbQ_H46OkHMk';
-    const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+    let supabaseClient = null;
+    try {
+      if (window.supabase) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      }
+    } catch (e) {
+      console.warn('Supabase kunde ej initieras:', e);
+    }
 
     // --- DEMODATA INNAN SPELLISTA LADDAS ---
     const INITIAL_CHANNELS = [
@@ -169,7 +173,8 @@
         quality: 'FHD',
         logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/SVT1_logo_2016.svg/512px-SVT1_logo_2016.svg.png',
         url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-        type: 'live'
+        type: 'live',
+        addedOrder: 1
       },
       {
         id: 'ch_demo_tv4',
@@ -179,7 +184,8 @@
         quality: 'FHD',
         logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/TV4_logo_2018.svg/512px-TV4_logo_2018.svg.png',
         url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-        type: 'live'
+        type: 'live',
+        addedOrder: 2
       }
     ];
 
@@ -188,34 +194,38 @@
     ];
 
     const GENRE_CARDS = [
-      { id: 'Action', label: 'Action', keywords: ['action', 'thriller', 'krig', 'war', 'crime', 'kriminal'], gradient: 'from-red-900/80 via-orange-900/60 to-black', icon: '💥' },
-      { id: 'Komedi', label: 'Komedi', keywords: ['comedy', 'komedi', 'standup', 'humor'], gradient: 'from-amber-700/80 via-yellow-900/60 to-black', icon: '😂' },
-      { id: 'Drama', label: 'Drama & Romantik', keywords: ['drama', 'romance', 'romantik'], gradient: 'from-purple-900/80 via-pink-900/60 to-black', icon: '🎭' },
-      { id: 'Barn', label: 'Barn & Familj', keywords: ['kids', 'barn', 'family', 'disney', 'anim', 'cartoon'], gradient: 'from-emerald-800/80 via-teal-900/60 to-black', icon: '🎈' },
-      { id: 'SciFi', label: 'Sci-Fi & Fantasy', keywords: ['sci-fi', 'scifi', 'fantasy', 'horror', 'skräck'], gradient: 'from-blue-900/80 via-indigo-950/60 to-black', icon: '🚀' },
-      { id: 'Nordic', label: 'Nordiskt & Svenskt', keywords: ['sweden', 'sverige', 'nordic', 'svensk', 'se ', 'swe'], gradient: 'from-sky-800/80 via-blue-950/60 to-black', icon: '🇸🇪' },
-      { id: '4K', label: '4K UHD & Dolby Vision', keywords: ['4k', 'uhd', 'dolby', 'hevc'], gradient: 'from-yellow-700/80 via-neutral-900 to-black', icon: '✨' },
-      { id: 'Doc', label: 'Dokumentär', keywords: ['doc', 'dokument', 'nature', 'history'], gradient: 'from-green-900/80 via-stone-900 to-black', icon: '🌍' }
+      { id: 'Action', label: 'Action', keywords: ['action', 'thriller', 'krig', 'war', 'crime', 'kriminal'], gradient: 'from-amber-900/80 via-yellow-950/60 to-black', icon: '💥' },
+      { id: 'Komedi', label: 'Komedi', keywords: ['comedy', 'komedi', 'standup', 'humor'], gradient: 'from-yellow-700/80 via-amber-950/60 to-black', icon: '😂' },
+      { id: 'Drama', label: 'Drama & Romantik', keywords: ['drama', 'romance', 'romantik'], gradient: 'from-zinc-800/90 via-zinc-950/80 to-black', icon: '🎭' },
+      { id: 'Barn', label: 'Barn & Familj', keywords: ['kids', 'barn', 'family', 'disney', 'anim', 'cartoon'], gradient: 'from-amber-800/80 via-stone-900/60 to-black', icon: '🎈' },
+      { id: 'SciFi', label: 'Sci-Fi & Fantasy', keywords: ['sci-fi', 'scifi', 'fantasy', 'horror', 'skräck'], gradient: 'from-yellow-900/70 via-zinc-950/80 to-black', icon: '🚀' },
+      { id: 'Nordic', label: 'Nordiskt & Svenskt', keywords: ['sweden', 'sverige', 'nordic', 'svensk', 'se ', 'swe'], gradient: 'from-yellow-600/70 via-amber-950/70 to-black', icon: '🇸🇪' },
+      { id: '4K', label: '4K UHD & Dolby Vision', keywords: ['4k', 'uhd', 'dolby', 'hevc'], gradient: 'from-amber-600/80 via-neutral-900 to-black', icon: '✨' },
+      { id: 'Doc', label: 'Dokumentär', keywords: ['doc', 'dokument', 'nature', 'history'], gradient: 'from-stone-800/80 via-zinc-950 to-black', icon: '🌍' }
     ];
 
     const YEAR_CARDS = ['2026', '2025', '2024', '2023', '2022', '2021', '2020'];
 
     // --- INDEXEDDB FÖR LOKAL LAGRING AV STORA M3U-LISTOR ---
-    const DB_NAME = 'MagnersKingCacheDB_v3';
+    const DB_NAME = 'ZappaPortalenCacheDB_v2';
     const DB_STORE = 'UserMediaCache';
 
     function openLocalDB() {
       return new Promise((resolve, reject) => {
-        if (!window.indexedDB) return reject('IndexedDB stöds ej');
-        const req = window.indexedDB.open(DB_NAME, 1);
-        req.onupgradeneeded = (e) => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains(DB_STORE)) {
-            db.createObjectStore(DB_STORE);
-          }
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
+        try {
+          if (!window.indexedDB) return reject('IndexedDB stöds ej');
+          const req = window.indexedDB.open(DB_NAME, 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) {
+              db.createObjectStore(DB_STORE);
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        } catch (err) {
+          reject(err);
+        }
       });
     }
 
@@ -248,7 +258,7 @@
     }
 
     // --- HJÄLPFUNKTIONER FÖR METADATA, KVALITET & PARSNING ---
-    function extractMetadata(name, group) {
+    function extractMetadata(name, group, rawExtInf = '') {
       let quality = '';
       if (/\b(4k|uhd|2160p)\b/i.test(name) || /\b(4k|uhd)\b/i.test(group)) quality = '4K';
       else if (/\b(fhd|1080p)\b/i.test(name)) quality = 'FHD';
@@ -263,12 +273,24 @@
       const season = seMatch ? parseInt(seMatch[2], 10) : null;
       const episode = seMatch ? parseInt(seMatch[3], 10) : null;
 
-      // Skapa ett konsekvent betyg (7.1 - 9.2) utifrån titelns tecken för snygg presentation
+      // Extrahera uppladdningstid om M3U-listan har t.ex. added="1730000000" eller tvg-rec="..."
+      let addedTimestamp = 0;
+      const addedAttr = rawExtInf.match(/(?:added|date|created|timestamp)="([^"]+)"/i);
+      if (addedAttr && addedAttr[1]) {
+        const parsedNum = Number(addedAttr[1]);
+        if (!isNaN(parsedNum) && parsedNum > 100000) {
+          addedTimestamp = parsedNum > 1e11 ? parsedNum : parsedNum * 1000;
+        } else {
+          const parsedDate = Date.parse(addedAttr[1]);
+          if (!isNaN(parsedDate)) addedTimestamp = parsedDate;
+        }
+      }
+
       let hash = 0;
       for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
       const rating = (7.0 + (Math.abs(hash) % 23) / 10).toFixed(1).replace('.', ',');
 
-      return { quality, year, seriesTitle, season, episode, rating };
+      return { quality, year, seriesTitle, season, episode, rating, addedTimestamp };
     }
 
     function parseXmltvDate(dateStr) {
@@ -335,9 +357,11 @@
       return epgMap;
     }
 
+    // --- SEPARERAD M3U-PARSER: SKILJER PÅ LIVE TV, VOD-KANALER, FILMER & SERIER ---
     function parseM3U(content) {
       const lines = content.split('\n');
       const live = [];
+      const vodChannels = [];
       const movies = [];
       const series = [];
       let detectedEpgUrl = '';
@@ -347,7 +371,9 @@
       let currentLogo = '';
       let currentTvgId = '';
       let currentTvgName = '';
+      let currentRawExtInf = '';
       const seenIds = new Set();
+      let orderCounter = 0;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -361,6 +387,7 @@
         }
 
         if (line.startsWith('#EXTINF:')) {
+          currentRawExtInf = line;
           const commaIndex = line.lastIndexOf(',');
           currentName = commaIndex !== -1 ? line.substring(commaIndex + 1).trim() : 'Okänd kanal';
           
@@ -392,6 +419,7 @@
             if (end !== -1) currentTvgName = line.substring(start, end);
           }
         } else if (line[0] !== '#') {
+          orderCounter += 1;
           const lowerGroup = currentGroup.toLowerCase();
           const lowerUrl = line.toLowerCase();
           const lowerName = currentName.toLowerCase();
@@ -404,27 +432,47 @@
           }
           seenIds.add(uniqueId);
 
-          const meta = extractMetadata(currentName, currentGroup);
+          const meta = extractMetadata(currentName, currentGroup, currentRawExtInf);
+
+          // Exakt kontroll: Är det en videofil (mp4/mkv/avi/mov/webm) eller /movie/ /series/ i URL:en?
+          const hasVideoFileExtension = /\.(mp4|mkv|avi|mov|webm|m4v|flv)(\?.*)?$/i.test(lowerUrl);
+          const isSeriesUrlOrPattern =
+            lowerUrl.includes('/series/') ||
+            /s\d{1,2}\s*e\d{1,3}/i.test(lowerName) ||
+            ((lowerGroup.includes('serie') || lowerGroup.includes('series')) && hasVideoFileExtension);
+
+          const isMovieFileOrUrl =
+            !isSeriesUrlOrPattern &&
+            (lowerUrl.includes('/movie/') ||
+              lowerUrl.includes('/movies/') ||
+              (hasVideoFileExtension && !lowerUrl.endsWith('.ts') && !lowerUrl.includes('.m3u8')));
+
+          // Är det en VOD-kanal / 24/7-kanal / Filmkanal (ström som spelas live men ligger i VOD/24-7/Bio-grupp)?
+          const isVodChannelPattern =
+            !isSeriesUrlOrPattern &&
+            !isMovieFileOrUrl &&
+            (lowerGroup.includes('24/7') ||
+              lowerGroup.includes('24-7') ||
+              lowerGroup.includes('vod') ||
+              lowerGroup.includes('box office') ||
+              lowerGroup.includes('ppv') ||
+              lowerGroup.includes('cinema') ||
+              lowerGroup.includes('filmkanal') ||
+              lowerGroup.includes('movie channel') ||
+              lowerName.includes('24/7') ||
+              lowerName.includes('vod:'));
 
           let itemType = 'live';
-          if (
-            lowerGroup.includes('serie') || 
-            lowerGroup.includes('series') || 
-            lowerUrl.includes('/series/') || 
-            /s\d{1,2}\s*e\d{1,3}/i.test(lowerName)
-          ) {
+          if (isSeriesUrlOrPattern) {
             itemType = 'series';
-          } else if (
-            lowerGroup.includes('vod') || 
-            lowerGroup.includes('movie') || 
-            lowerGroup.includes('film') || 
-            lowerUrl.includes('/movie/') || 
-            lowerUrl.endsWith('.mp4') || 
-            lowerUrl.endsWith('.mkv') || 
-            lowerUrl.endsWith('.avi')
-          ) {
+          } else if (isMovieFileOrUrl) {
             itemType = 'movies';
+          } else if (isVodChannelPattern) {
+            itemType = 'vod_channel';
           }
+
+          // Beräkna exakt sorteringspoäng för "Nyligen tillagda" (Högst = Nyast uppladdad i spellistan)
+          const addedScore = meta.addedTimestamp > 0 ? meta.addedTimestamp : orderCounter;
 
           const item = {
             id: uniqueId,
@@ -439,11 +487,13 @@
             rating: meta.rating,
             seriesTitle: meta.seriesTitle,
             season: meta.season,
-            episode: meta.episode
+            episode: meta.episode,
+            addedOrder: addedScore
           };
 
           if (itemType === 'series') series.push(item);
           else if (itemType === 'movies') movies.push(item);
+          else if (itemType === 'vod_channel') vodChannels.push(item);
           else live.push(item);
 
           currentName = '';
@@ -451,13 +501,53 @@
           currentLogo = '';
           currentTvgId = '';
           currentTvgName = '';
+          currentRawExtInf = '';
         }
       }
-      return { live, movies, series, detectedEpgUrl };
+      return { live, vodChannels, movies, series, detectedEpgUrl };
     }
 
-    // --- KOMPONENT: HORISONTELL KARUSELLRAD (NETFLIX / IPTVX STIL) ---
-    function MediaCarouselRow({ title, items, onSelect, onFavClick, onExpand, type = 'poster', favItemIds, watchProgressMap, getChannelEpg }) {
+    // --- PROFFSIG BILDKOMPONENT UTAN ÖVERDRIVEN ZOOM / KAPADE KANTER ---
+    function SmartMediaImage({ src, alt, fallbackIcon = '🎬', mode = 'poster' }) {
+      const [imgErr, setImgErr] = useState(false);
+
+      if (!src || imgErr) {
+        return (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-b from-zinc-800/40 to-black">
+            <span className="text-3xl mb-1.5 opacity-45">{fallbackIcon}</span>
+          </div>
+        );
+      }
+
+      return (
+        <div className="absolute inset-0 w-full h-full overflow-hidden bg-[#0A0B0E] flex items-center justify-center">
+          {/* Subtil oskärpt bakgrund så att det aldrig blir fula svarta kanter runt bilden */}
+          <img
+            src={src}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover blur-xl opacity-35 scale-110 pointer-events-none"
+          />
+          {/* Huvudbilden med måttlig passform så ingenting zoomas sönder eller klipps av */}
+          <img
+            src={src}
+            alt={alt || ''}
+            loading="lazy"
+            onError={() => setImgErr(true)}
+            className={`relative z-10 w-full h-full transition-transform duration-300 group-hover:scale-[1.02] ${
+              mode === 'logo'
+                ? 'object-contain p-3'
+                : mode === 'landscape'
+                ? 'object-contain p-1.5'
+                : 'object-contain p-0.5'
+            }`}
+          />
+        </div>
+      );
+    }
+
+    // --- KOMPONENT: HORISONTELL KARUSELLRAD ---
+    function MediaCarouselRow({ title, subtitle, items, onSelect, onFavClick, onExpand, type = 'poster', favItemIds, watchProgressMap, getChannelEpg }) {
       const scrollRef = useRef(null);
 
       if (!items || items.length === 0) return null;
@@ -471,13 +561,16 @@
       return (
         <section className="space-y-2.5 relative group/row">
           <div className="flex items-center justify-between px-4 sm:px-8">
-            <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-              {title}
-            </h2>
+            <div>
+              <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
+                {title}
+              </h2>
+              {subtitle && <p className="text-[11px] text-zinc-400">{subtitle}</p>}
+            </div>
             {onExpand && (
               <button
                 onClick={onExpand}
-                className="text-xs sm:text-sm font-bold text-[#E50914] hover:text-red-400 transition"
+                className="text-xs sm:text-sm font-bold text-[#F3D078] hover:text-amber-300 transition"
               >
                 Expandera
               </button>
@@ -485,16 +578,15 @@
           </div>
 
           <div className="relative">
-            {/* Vänster/Höger pilar på Desktop */}
             <button
               onClick={() => scroll('left')}
-              className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-20 w-10 h-24 rounded-xl bg-black/80 hover:bg-[#E50914] text-white items-center justify-center opacity-0 group-hover/row:opacity-100 transition shadow-xl border border-white/10"
+              className="hidden md:flex absolute left-1 top-1/2 -translate-y-1/2 z-20 w-10 h-24 rounded-xl bg-black/80 hover:bg-[#F3D078] text-white hover:text-black font-bold items-center justify-center opacity-0 group-hover/row:opacity-100 transition shadow-xl border border-white/10"
             >
               ‹
             </button>
             <button
               onClick={() => scroll('right')}
-              className="hidden md:flex absolute right-1 top-1/2 -translate-y-1/2 z-20 w-10 h-24 rounded-xl bg-black/80 hover:bg-[#E50914] text-white items-center justify-center opacity-0 group-hover/row:opacity-100 transition shadow-xl border border-white/10"
+              className="hidden md:flex absolute right-1 top-1/2 -translate-y-1/2 z-20 w-10 h-24 rounded-xl bg-black/80 hover:bg-[#F3D078] text-white hover:text-black font-bold items-center justify-center opacity-0 group-hover/row:opacity-100 transition shadow-xl border border-white/10"
             >
               ›
             </button>
@@ -508,7 +600,6 @@
                 const prog = watchProgressMap?.[item.id];
                 const progPct = prog && prog.duration > 0 ? Math.min(98, Math.round((prog.time / prog.duration) * 100)) : 0;
 
-                // 1. TOPP 10 MED STORA SIFFROR
                 if (type === 'rank') {
                   return (
                     <div
@@ -519,19 +610,13 @@
                       <span className="rank-number absolute left-0 bottom-0 z-0 select-none pointer-events-none group-hover:scale-105 transition">
                         {idx + 1}
                       </span>
-                      <div className="relative z-10 w-28 sm:w-36 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 border border-white/15 group-hover:border-[#E50914] transition shadow-2xl">
-                        {item.logo ? (
-                          <img src={item.logo} alt={item.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-zinc-800 to-zinc-950">
-                            <span className="text-2xl mb-1">🎬</span>
-                            <span className="text-[11px] font-bold text-white line-clamp-3">{item.name}</span>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
-                        <div className="absolute bottom-2 left-2 right-2 flex flex-col items-center">
-                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E50914] text-white shadow">
-                            {item.type === 'series' ? 'SERIE' : 'TOPPVAL'}
+                      <div className="relative z-10 w-28 sm:w-36 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 border border-white/15 group-hover:border-[#F3D078] transition shadow-2xl">
+                        <SmartMediaImage src={item.logo} alt={item.name} mode="poster" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent z-10" />
+                        <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-col items-center text-center">
+                          <p className="text-[10px] font-bold text-white line-clamp-1 mb-1">{item.seriesTitle || item.name}</p>
+                          <span className="text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-[#F3D078] text-black shadow">
+                            TOPP {idx + 1}
                           </span>
                         </div>
                       </div>
@@ -539,21 +624,20 @@
                   );
                 }
 
-                // 2. SENAST SEDDA LIVE-KANALER (IPTVX KORT-STIL)
                 if (type === 'live-card') {
                   const epg = getChannelEpg ? getChannelEpg(item) : null;
                   return (
                     <div
                       key={item.id}
                       onClick={() => onSelect(item)}
-                      className="shrink-0 w-60 sm:w-64 rounded-2xl bg-[#111214] border border-white/10 hover:border-[#E50914] p-4 flex flex-col justify-between cursor-pointer transition group shadow-lg"
+                      className="shrink-0 w-60 sm:w-64 rounded-2xl bg-[#111214] border border-white/10 hover:border-[#F3D078] p-4 flex flex-col justify-between cursor-pointer transition group shadow-lg"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center p-1.5 shrink-0">
                           {item.logo ? (
                             <img src={item.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
                           ) : (
-                            <span className="text-sm font-bold text-[#E50914]">TV</span>
+                            <span className="text-xs font-bold text-[#F3D078]">TV</span>
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -577,13 +661,15 @@
                             </p>
                             <p className="text-xs font-bold text-white truncate">{epg.currentProg.title}</p>
                             <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                              <div className="bg-[#E50914] h-full rounded-full" style={{ width: `${epg.progress}%` }} />
+                              <div className="bg-[#F3D078] h-full rounded-full" style={{ width: `${epg.progress}%` }} />
                             </div>
                           </>
                         ) : (
                           <>
-                            <p className="text-[10px] text-zinc-500">Direktsändning</p>
-                            <p className="text-xs font-medium text-zinc-400">EPG inte tillgänglig</p>
+                            <p className="text-[10px] text-[#F3D078]/80 font-semibold">
+                              {item.type === 'vod_channel' ? '24/7 VOD-Kanal' : 'Direktsändning'}
+                            </p>
+                            <p className="text-xs font-medium text-zinc-400 truncate">{item.group}</p>
                             <div className="w-full h-1 bg-white/5 rounded-full" />
                           </>
                         )}
@@ -592,45 +678,36 @@
                   );
                 }
 
-                // 3. BREDA LANDSKAPSKORT ("FORTSÄTT ATT TITTA" / "PRISBELÖNTA")
                 if (type === 'landscape') {
                   return (
                     <div
                       key={item.id}
                       onClick={() => onSelect(item)}
-                      className="shrink-0 w-64 sm:w-72 aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-white/10 hover:border-[#E50914] relative cursor-pointer group transition shadow-xl"
+                      className="shrink-0 w-64 sm:w-72 aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-white/10 hover:border-[#F3D078] relative cursor-pointer group transition shadow-xl"
                     >
-                      {item.logo ? (
-                        <img src={item.logo} alt={item.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-black flex items-center justify-center">
-                          <span className="text-3xl opacity-30">▶</span>
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                      <SmartMediaImage src={item.logo} alt={item.name} mode="landscape" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent z-10" />
 
-                      {/* Topp-badge */}
-                      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                      <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
                         {item.quality && (
-                          <span className="bg-black/75 backdrop-blur-md text-[10px] font-extrabold px-2 py-0.5 rounded border border-white/15 text-amber-400">
+                          <span className="bg-black/75 backdrop-blur-md text-[10px] font-extrabold px-2 py-0.5 rounded border border-white/15 text-[#F3D078]">
                             {item.quality}
                           </span>
                         )}
                       </div>
 
-                      {/* Spela-ikon i mitten */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-11 h-11 rounded-full bg-black/60 border border-white/30 flex items-center justify-center text-white group-hover:bg-[#E50914] group-hover:border-[#E50914] group-hover:scale-110 transition">
+                      <div className="absolute inset-0 z-20 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-black/65 border border-white/30 flex items-center justify-center text-white group-hover:bg-[#F3D078] group-hover:text-black group-hover:border-[#F3D078] transition">
                           ▶
                         </div>
                       </div>
 
-                      <div className="absolute bottom-2.5 left-3 right-3">
+                      <div className="absolute bottom-2.5 left-3 right-3 z-20">
                         <h3 className="text-xs sm:text-sm font-extrabold text-white truncate drop-shadow">{item.name}</h3>
                         <p className="text-[10px] text-zinc-300 truncate">{item.group}</p>
                         {progPct > 0 && (
                           <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden mt-1.5">
-                            <div className="bg-[#E50914] h-full" style={{ width: `${progPct}%` }} />
+                            <div className="bg-[#F3D078] h-full" style={{ width: `${progPct}%` }} />
                           </div>
                         )}
                       </div>
@@ -638,24 +715,20 @@
                   );
                 }
 
-                // 4. VERTIKALA BIO-POSTERS (STANDARD VOD / SERIER)
                 return (
                   <div
                     key={item.id}
                     onClick={() => onSelect(item)}
-                    className="shrink-0 w-32 sm:w-40 aspect-[2/3] rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#E50914] relative cursor-pointer group transition-all duration-200 hover:scale-[1.03] shadow-lg flex flex-col justify-end"
+                    className="shrink-0 w-32 sm:w-40 aspect-[2/3] rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#F3D078] relative cursor-pointer group transition-all duration-200 hover:scale-[1.015] shadow-lg flex flex-col justify-end"
                   >
-                    {item.logo ? (
-                      <img src={item.logo} alt={item.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center bg-gradient-to-b from-zinc-800/40 to-black">
-                        <span className="text-3xl mb-2 opacity-40">{item.type === 'series' ? '🍿' : '🎬'}</span>
-                        <span className="text-xs font-bold text-zinc-200 line-clamp-3">{item.name}</span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-90" />
+                    <SmartMediaImage
+                      src={item.logo}
+                      alt={item.name}
+                      fallbackIcon={item.type === 'series' ? '🍿' : '🎬'}
+                      mode="poster"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent opacity-95 z-10" />
 
-                    {/* Stjärnknapp uppe i hörnet */}
                     {onFavClick && (
                       <button
                         onClick={(e) => {
@@ -664,7 +737,7 @@
                         }}
                         className={`absolute top-2 right-2 z-20 w-7 h-7 rounded-full flex items-center justify-center text-xs transition ${
                           isFav
-                            ? 'bg-[#E50914] text-white shadow'
+                            ? 'bg-[#F3D078] text-black shadow font-black'
                             : 'bg-black/60 text-zinc-300 opacity-0 group-hover:opacity-100 hover:bg-black'
                         }`}
                       >
@@ -672,12 +745,12 @@
                       </button>
                     )}
 
-                    <div className="relative z-10 p-2.5 flex flex-col items-center text-center w-full">
+                    <div className="relative z-20 p-2.5 flex flex-col items-center text-center w-full">
                       <h3 className="text-[11px] font-bold text-white line-clamp-2 leading-tight mb-1.5 drop-shadow">
                         {item.seriesTitle || item.name}
                       </h3>
-                      <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-[#E50914] text-white shadow">
-                        {item.episodeCount ? `${item.episodeCount} AVSNITT` : item.type === 'series' ? 'NY SERIE' : 'NY FILM'}
+                      <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-[#F3D078] text-black shadow">
+                        {item.episodeCount ? `${item.episodeCount} AVSNITT` : item.type === 'series' ? 'SERIE' : 'FILM'}
                       </span>
                     </div>
                   </div>
@@ -698,66 +771,58 @@
       const emailInputRef = useRef(null);
       const passwordInputRef = useRef(null);
 
-      // Mediedata
+      // Separerade medielistor: Live-kanaler, VOD-kanaler, Filmer (on-demand) och Serier
       const [channels, setChannels] = useState(INITIAL_CHANNELS);
+      const [vodChannels, setVodChannels] = useState([]);
       const [movies, setMovies] = useState([]);
       const [series, setSeries] = useState([]);
       const [favLists, setFavLists] = useState(DEFAULT_FAV_LISTS);
 
-      // Historik & Fortsätt titta
-      const [watchHistory, setWatchHistory] = useState([]); // Array med senaste items
-      const [watchProgress, setWatchProgress] = useState({}); // { [itemId]: { time, duration, updated } }
+      const [watchHistory, setWatchHistory] = useState([]);
+      const [watchProgress, setWatchProgress] = useState({});
 
-      // EPG
       const [epgData, setEpgData] = useState({});
       const [epgUrl, setEpgUrl] = useState('');
       const [epgStatus, setEpgStatus] = useState('');
       const [epgSearch, setEpgSearch] = useState('');
 
-      // Navigering: 'home' (För dig), 'movies' (Film), 'series' (Serie), 'live' (Live), 'epg' (TV-guide), 'settings' (Inställningar)
       const [activeTab, setActiveTab] = useState('home');
       const [currentMedia, setCurrentMedia] = useState(null);
       const [isFullscreenPlayer, setIsFullscreenPlayer] = useState(false);
 
-      // Filter / Kategori-expansion / Sök
-      const [expandedCategory, setExpandedCategory] = useState(null); // { title, items }
+      const [expandedCategory, setExpandedCategory] = useState(null);
       const [selectedLiveGroup, setSelectedLiveGroup] = useState('ALL');
+      const [selectedVodChGroup, setSelectedVodChGroup] = useState('ALL');
       const [searchModal, setSearchModal] = useState(false);
       const [globalSearch, setGlobalSearch] = useState('');
       const [renderLimit, setRenderLimit] = useState(80);
 
-      // Detalj-modal för Film / Serie (med Säsong & Avsnittsväljare)
       const [detailItem, setDetailItem] = useState(null);
       const [selectedSeason, setSelectedSeason] = useState(1);
 
-      // Spelarinställningar & Tema
       const [playerEngine, setPlayerEngine] = useState('auto');
       const [tvMode, setTvMode] = useState(false);
-      const [accentTheme, setAccentTheme] = useState('crimson'); // 'crimson' (IPTVX/Netflix) eller 'gold' (Royal)
+      const [accentTheme, setAccentTheme] = useState('aik');
       const [copyFeedback, setCopyFeedback] = useState(false);
       const [quickDrawer, setQuickDrawer] = useState(false);
 
-      // Favorit-modaler
       const [favModalItem, setFavModalItem] = useState(null);
       const [manageFavModal, setManageFavModal] = useState(false);
       const [newListName, setNewListName] = useState('');
       const [newListGroup, setNewListGroup] = useState('ALL');
       const [newListFilter, setNewListFilter] = useState('');
 
-      // Källor & Status
       const [savedM3uUrl, setSavedM3uUrl] = useState('');
       const [m3uUrl, setM3uUrl] = useState('');
       const [statusMsg, setStatusMsg] = useState('');
-      const [settingsSubView, setSettingsSubView] = useState(null); // 'sources', 'player', 'appearance', 'cloud'
+      const [settingsSubView, setSettingsSubView] = useState(null);
 
-      // Videoreferenser
       const videoRef = useRef(null);
       const [videoError, setVideoError] = useState(null);
       const retryCountRef = useRef(0);
 
-      const accentColor = accentTheme === 'crimson' ? '#E50914' : '#D4A346';
+      const accentColor = accentTheme === 'aik' ? '#F3D078' : '#D4A346';
 
-      // --- AUTENTISERING & DATA-LADDNING ---
       useEffect(() => {
         if (!supabaseClient) return;
         supabaseClient.auth.getUser().then(({ data }) => {
@@ -768,7 +833,7 @@
           } else {
             setAuthModal(true);
           }
-        });
+        }).catch(() => {});
 
         const { data: authListener } = supabaseClient.auth.onAuthStateChange((event, session) => {
           if (session?.user) {
@@ -778,6 +843,7 @@
           } else {
             setUser(null);
             setChannels(INITIAL_CHANNELS);
+            setVodChannels([]);
             setMovies([]);
             setSeries([]);
             setAuthModal(true);
@@ -790,10 +856,10 @@
       }, []);
 
       async function loadUserData(userId) {
-        // 1. Ladda lokal cache (IndexedDB)
         const cachedMedia = await loadLocalCache(`media_${userId}`);
         if (cachedMedia) {
           if (cachedMedia.channels?.length) setChannels(cachedMedia.channels);
+          if (cachedMedia.vodChannels) setVodChannels(cachedMedia.vodChannels);
           if (cachedMedia.movies) setMovies(cachedMedia.movies);
           if (cachedMedia.series) setSeries(cachedMedia.series);
           if (cachedMedia.m3uUrl) {
@@ -801,7 +867,9 @@
             setM3uUrl(cachedMedia.m3uUrl);
           }
           if (cachedMedia.epgUrl) setEpgUrl(cachedMedia.epgUrl);
-          setStatusMsg(`Spellista redo: ${cachedMedia.channels?.length || 0} kanaler, ${cachedMedia.movies?.length || 0} filmer, ${cachedMedia.series?.length || 0} serieavsnitt.`);
+          setStatusMsg(
+            `Spellista redo: ${cachedMedia.channels?.length || 0} livekanaler, ${cachedMedia.vodChannels?.length || 0} VOD-kanaler, ${cachedMedia.movies?.length || 0} filmer, ${cachedMedia.series?.length || 0} serieavsnitt.`
+          );
         }
 
         const cachedEpg = await loadLocalCache(`epg_${userId}`);
@@ -813,7 +881,6 @@
           if (cachedHistory.watchProgress) setWatchProgress(cachedHistory.watchProgress);
         }
 
-        // 2. Ladda Smarta Mappar från Supabase
         if (!supabaseClient) return;
         try {
           const { data, error } = await supabaseClient
@@ -843,7 +910,6 @@
         }
       }
 
-      // Registrera uppspelning i "Fortsätt titta" / "Senast sedda"
       const startPlayback = (item, openFull = true) => {
         if (!item) return;
         setCurrentMedia(item);
@@ -860,10 +926,9 @@
         });
       };
 
-      // Spara tidsposition under film/serie-uppspelning
       const handleTimeUpdate = () => {
         const video = videoRef.current;
-        if (!video || !currentMedia || currentMedia.type === 'live') return;
+        if (!video || !currentMedia || currentMedia.type === 'live' || currentMedia.type === 'vod_channel') return;
         if (video.currentTime > 5 && video.duration > 30) {
           setWatchProgress((prev) => {
             const next = {
@@ -882,7 +947,7 @@
         }
       };
 
-      // --- VIDEOSPELARMOTOR MED AUTO-RECONNECT ---
+      // --- VIDEOSPELARMOTOR ---
       useEffect(() => {
         const video = videoRef.current;
         const mediaUrl = currentMedia?.url;
@@ -917,7 +982,7 @@
 
         const applySavedTime = () => {
           const saved = watchProgress[currentMedia.id];
-          if (saved && saved.time > 10 && currentMedia.type !== 'live') {
+          if (saved && saved.time > 10 && currentMedia.type !== 'live' && currentMedia.type !== 'vod_channel') {
             video.currentTime = saved.time;
           }
         };
@@ -927,7 +992,7 @@
             try {
               mpegtsPlayer = window.mpegts.createPlayer({
                 type: 'mpegts',
-                isLive: currentMedia.type === 'live',
+                isLive: currentMedia.type === 'live' || currentMedia.type === 'vod_channel',
                 url: mediaUrl,
                 cors: true
               }, { enableWorker: true, lazyLoadMaxDuration: 3 * 60, seekType: 'range' });
@@ -1002,7 +1067,6 @@
         return cleanUp;
       }, [currentMedia, user, playerEngine]);
 
-      // --- EPG MATCHNING ---
       const getChannelEpg = (ch) => {
         if (!ch || Object.keys(epgData).length === 0) return null;
         const cleanName = ch.name.toLowerCase().replace(/\s+(hd|fhd|uhd|4k|se|uk|us|\[\-?\d+h\])$/gi, '').trim();
@@ -1037,7 +1101,7 @@
         return { currentProg, nextProg, progress };
       };
 
-      // --- GRUPPERING AV SERIER (SÄSONG & AVSNITT) ---
+      // --- GRUPPERING AV SERIER + KORREKT "SENAST UPPLADDAD"-TID ---
       const groupedSeriesCatalog = useMemo(() => {
         const showMap = {};
         const shows = [];
@@ -1050,28 +1114,41 @@
               name: ep.seriesTitle || ep.name,
               isSeriesShow: true,
               episodes: [],
-              episodeCount: 0
+              episodeCount: 0,
+              latestAddedOrder: ep.addedOrder || 0
             };
             showMap[showKey] = showObj;
             shows.push(showObj);
           }
           showMap[showKey].episodes.push(ep);
           showMap[showKey].episodeCount += 1;
+          // Uppdatera seriens uppladdningstid till det allra senaste avsnittets tidpunkt!
+          if ((ep.addedOrder || 0) > showMap[showKey].latestAddedOrder) {
+            showMap[showKey].latestAddedOrder = ep.addedOrder;
+          }
         });
         return shows;
       }, [series]);
 
-      // --- SMARTA MAPPAR & FAVORITER ---
+      // --- SORTERADE LISTOR FÖR "NYLIGEN TILLAGDA" (SENASTE FÖRST!) ---
+      const recentlyAddedMovies = useMemo(() => {
+        return [...movies].sort((a, b) => (b.addedOrder || 0) - (a.addedOrder || 0));
+      }, [movies]);
+
+      const recentlyAddedSeries = useMemo(() => {
+        return [...groupedSeriesCatalog].sort((a, b) => (b.latestAddedOrder || 0) - (a.latestAddedOrder || 0));
+      }, [groupedSeriesCatalog]);
+
       const allAvailableGroups = useMemo(() => {
         const set = new Set();
-        [...channels, ...movies, ...series].forEach((item) => {
+        [...channels, ...vodChannels, ...movies, ...series].forEach((item) => {
           if (item.group) set.add(item.group);
         });
         return Array.from(set);
-      }, [channels, movies, series]);
+      }, [channels, vodChannels, movies, series]);
 
       const favItemsById = useMemo(() => {
-        const allItems = [...channels, ...movies, ...series];
+        const allItems = [...channels, ...vodChannels, ...movies, ...series];
         const map = {};
         favLists.forEach((favList) => {
           const manualSet = new Set(favList.channelIds || []);
@@ -1091,7 +1168,7 @@
           });
         });
         return map;
-      }, [favLists, channels, movies, series]);
+      }, [favLists, channels, vodChannels, movies, series]);
 
       const allFavoritedIds = useMemo(() => {
         const set = new Set();
@@ -1113,26 +1190,25 @@
         return result;
       }, [favItemsById]);
 
-      // --- GRUPPERADE RADER FÖR FILM, SERIE & LIVE ---
       const movieGroups = useMemo(() => {
         const map = {};
-        movies.forEach((m) => {
-          const g = m.group || 'VOD: Filmer';
+        recentlyAddedMovies.forEach((m) => {
+          const g = m.group || 'Filmer';
           if (!map[g]) map[g] = [];
           map[g].push(m);
         });
         return Object.entries(map);
-      }, [movies]);
+      }, [recentlyAddedMovies]);
 
       const seriesGroups = useMemo(() => {
         const map = {};
-        groupedSeriesCatalog.forEach((s) => {
-          const g = s.group || 'Series';
+        recentlyAddedSeries.forEach((s) => {
+          const g = s.group || 'Serier';
           if (!map[g]) map[g] = [];
           map[g].push(s);
         });
         return Object.entries(map);
-      }, [groupedSeriesCatalog]);
+      }, [recentlyAddedSeries]);
 
       const liveGroups = useMemo(() => {
         const map = {};
@@ -1144,24 +1220,31 @@
         return map;
       }, [channels]);
 
-      // --- HERO FEATURED ITEM (FÖR DIG / FILM / SERIE) ---
-      const heroItem = useMemo(() => {
-        if (activeTab === 'movies' && movies.length > 0) return movies[0];
-        if (activeTab === 'series' && groupedSeriesCatalog.length > 0) return groupedSeriesCatalog[0];
-        if (movies.length > 0) return movies[Math.min(2, movies.length - 1)];
-        if (groupedSeriesCatalog.length > 0) return groupedSeriesCatalog[0];
-        return channels[0] || INITIAL_CHANNELS[0];
-      }, [activeTab, movies, groupedSeriesCatalog, channels]);
+      const vodChannelGroups = useMemo(() => {
+        const map = {};
+        vodChannels.forEach((vc) => {
+          const g = vc.group || 'VOD-Kanaler';
+          if (!map[g]) map[g] = [];
+          map[g].push(vc);
+        });
+        return map;
+      }, [vodChannels]);
 
-      // --- SÖKRESULTAT ---
+      const heroItem = useMemo(() => {
+        if (activeTab === 'movies' && recentlyAddedMovies.length > 0) return recentlyAddedMovies[0];
+        if (activeTab === 'series' && recentlyAddedSeries.length > 0) return recentlyAddedSeries[0];
+        if (recentlyAddedMovies.length > 0) return recentlyAddedMovies[0];
+        if (recentlyAddedSeries.length > 0) return recentlyAddedSeries[0];
+        return channels[0] || INITIAL_CHANNELS[0];
+      }, [activeTab, recentlyAddedMovies, recentlyAddedSeries, channels]);
+
       const searchResults = useMemo(() => {
         if (!globalSearch.trim()) return [];
         const q = globalSearch.toLowerCase().trim();
-        const all = [...channels, ...movies, ...groupedSeriesCatalog];
+        const all = [...channels, ...vodChannels, ...movies, ...groupedSeriesCatalog];
         return all.filter((item) => item.name.toLowerCase().includes(q) || (item.group && item.group.toLowerCase().includes(q))).slice(0, 120);
-      }, [globalSearch, channels, movies, groupedSeriesCatalog]);
+      }, [globalSearch, channels, vodChannels, movies, groupedSeriesCatalog]);
 
-      // --- HANDLERS ---
       const handleCardSelect = (item) => {
         if (item.isSeriesShow && item.episodes?.length > 0) {
           setDetailItem(item);
@@ -1219,7 +1302,7 @@
         const passVal = passwordInputRef.current?.value || '';
         if (!emailVal || !passVal) return alert('Fyll i både e-post och lösenord.');
 
-        try { localStorage.setItem('mk_saved_email', emailVal); } catch (err) {}
+        try { localStorage.setItem('zp_saved_email', emailVal); } catch (err) {}
 
         if (isSignUp) {
           const { error } = await supabaseClient.auth.signUp({ email: emailVal, password: passVal });
@@ -1318,16 +1401,19 @@
 
       const applyParsedData = async (parsed, sourceM3uUrl = '') => {
         const newLive = parsed.live.length > 0 ? parsed.live : INITIAL_CHANNELS;
-        const newMovies = parsed.movies;
-        const newSeries = parsed.series;
+        const newVodChannels = parsed.vodChannels || [];
+        const newMovies = parsed.movies || [];
+        const newSeries = parsed.series || [];
 
         setChannels(newLive);
+        setVodChannels(newVodChannels);
         setMovies(newMovies);
         setSeries(newSeries);
 
         if (user) {
           await saveLocalCache(`media_${user.id}`, {
             channels: newLive,
+            vodChannels: newVodChannels,
             movies: newMovies,
             series: newSeries,
             m3uUrl: sourceM3uUrl || savedM3uUrl,
@@ -1336,7 +1422,9 @@
         }
 
         saveToCloud(favLists);
-        setStatusMsg(`Klar! Sparade ${newLive.length} kanaler, ${newMovies.length} filmer och ${newSeries.length} serieavsnitt.`);
+        setStatusMsg(
+          `Klar! Sparade ${newLive.length} livekanaler, ${newVodChannels.length} VOD-kanaler, ${newMovies.length} filmer och ${newSeries.length} serieavsnitt.`
+        );
 
         if (parsed.detectedEpgUrl) {
           setEpgUrl(parsed.detectedEpgUrl);
@@ -1348,7 +1436,7 @@
         if (!user) return;
         const file = e.target.files?.[0];
         if (!file) return;
-        setStatusMsg('Läser in och optimerar M3U-fil...');
+        setStatusMsg('Läser in och separerar Live, VOD-kanaler, Filmer & Serier...');
         setTimeout(() => {
           const reader = new FileReader();
           reader.onload = (ev) => {
@@ -1391,6 +1479,7 @@
         await saveLocalCache(`epg_${user.id}`, null);
         await saveLocalCache(`history_${user.id}`, null);
         setChannels(INITIAL_CHANNELS);
+        setVodChannels([]);
         setMovies([]);
         setSeries([]);
         setWatchHistory([]);
@@ -1400,7 +1489,7 @@
       };
 
       const openGenreFilter = (genreObj) => {
-        const allVod = [...movies, ...groupedSeriesCatalog];
+        const allVod = [...recentlyAddedMovies, ...recentlyAddedSeries];
         const matches = allVod.filter((item) => {
           const hay = `${item.name} ${item.group}`.toLowerCase();
           return genreObj.keywords.some((kw) => hay.includes(kw));
@@ -1412,7 +1501,7 @@
       };
 
       const openYearFilter = (yr) => {
-        const allVod = [...movies, ...groupedSeriesCatalog];
+        const allVod = [...recentlyAddedMovies, ...recentlyAddedSeries];
         const matches = allVod.filter((item) => item.year === yr || item.name.includes(yr));
         setExpandedCategory({
           title: `Utforska år: ${yr}`,
@@ -1421,7 +1510,7 @@
       };
 
       const savedEmailDefault = useMemo(() => {
-        try { return localStorage.getItem('mk_saved_email') || ''; } catch (e) { return ''; }
+        try { return localStorage.getItem('zp_saved_email') || localStorage.getItem('mk_saved_email') || ''; } catch (e) { return ''; }
       }, []);
 
       const activeChannelEpg = useMemo(() => getChannelEpg(currentMedia), [currentMedia, epgData]);
@@ -1429,34 +1518,33 @@
       return (
         <div className={`w-full h-screen bg-black flex flex-col overflow-hidden text-white relative ${tvMode ? 'text-lg' : ''}`}>
           
-          {/* TOPP-NAVIGERING (IPTVX / NETFLIX STIL) */}
+          {/* TOPP-NAVIGERING (MED SEPARERADE FLIKAR FÖR FILM, SERIE, VOD-KANALER & LIVE) */}
           <header className="h-16 sm:h-20 bg-gradient-to-b from-black/95 via-black/80 to-transparent px-4 sm:px-8 flex items-center justify-between shrink-0 z-30 border-b border-white/5">
-            <div className="flex items-center gap-5 sm:gap-8 min-w-0">
-              {/* Logotyp */}
+            <div className="flex items-center gap-5 sm:gap-7 min-w-0">
               <div
                 onClick={() => { setActiveTab('home'); setExpandedCategory(null); setIsFullscreenPlayer(false); }}
                 className="flex items-center gap-2.5 cursor-pointer shrink-0 group"
               >
                 <div
                   style={{ backgroundColor: accentColor }}
-                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-[0_0_25px_rgba(229,9,20,0.5)] group-hover:scale-105 transition"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-[#D4A346] flex items-center justify-center text-black font-black text-lg shadow-[0_0_25px_rgba(243,208,120,0.45)] group-hover:scale-105 transition"
                 >
-                  X
+                  Z
                 </div>
                 <div className="hidden sm:block">
-                  <span className="font-black tracking-wider text-base text-white block leading-none">MAGNERSKING</span>
-                  <span className="text-[9px] font-bold tracking-widest uppercase text-amber-400 block mt-0.5">ROYAL IPTVX</span>
+                  <span className="font-black tracking-wider text-base text-white block leading-none">ZAPPAPORTALEN</span>
+                  <span className="text-[9px] font-bold tracking-widest uppercase text-[#F3D078] block mt-0.5">ZAPPAPORTALEN.SE</span>
                 </div>
               </div>
 
-              {/* Huvudmeny (Flikar med röd understrykning som i IPTVX) */}
               {user && (
-                <nav className="flex items-center gap-4 sm:gap-6 overflow-x-auto no-scrollbar py-2">
+                <nav className="flex items-center gap-4 sm:gap-5 overflow-x-auto no-scrollbar py-2">
                   {[
                     { id: 'home', label: 'För dig' },
-                    { id: 'movies', label: 'Film', count: movies.length },
-                    { id: 'series', label: 'Serie', count: groupedSeriesCatalog.length },
-                    { id: 'live', label: 'Live', count: channels.length },
+                    { id: 'movies', label: 'Filmer', count: movies.length },
+                    { id: 'series', label: 'Serier', count: groupedSeriesCatalog.length },
+                    { id: 'vod_channels', label: 'VOD-kanaler', count: vodChannels.length },
+                    { id: 'live', label: 'Live TV', count: channels.length },
                     { id: 'epg', label: 'TV-guide' },
                     { id: 'settings', label: 'Inställningar' }
                   ].map((tab) => {
@@ -1470,15 +1558,20 @@
                           setIsFullscreenPlayer(false);
                           setSettingsSubView(null);
                         }}
-                        className={`relative py-2 text-xs sm:text-sm font-bold whitespace-nowrap transition-colors ${
+                        className={`relative py-2 text-xs sm:text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                           isActive ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
                         <span>{tab.label}</span>
+                        {tab.count > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 text-zinc-300 font-semibold">
+                            {tab.count}
+                          </span>
+                        )}
                         {isActive && (
                           <span
                             style={{ backgroundColor: accentColor }}
-                            className="absolute bottom-0 left-0 right-0 h-[3px] rounded-full shadow-[0_0_10px_#E50914]"
+                            className="absolute bottom-0 left-0 right-0 h-[3px] rounded-full shadow-[0_0_10px_#F3D078]"
                           />
                         )}
                       </button>
@@ -1488,7 +1581,6 @@
               )}
             </div>
 
-            {/* Höger verktygsfält: Sök, Smarta Mappar & Profil-avatar */}
             {user && (
               <div className="flex items-center gap-3 shrink-0">
                 <button
@@ -1501,21 +1593,20 @@
 
                 <button
                   onClick={() => setManageFavModal(true)}
-                  className="hidden md:flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-white/15 px-3.5 py-2 rounded-full text-xs font-bold text-amber-400 transition"
+                  className="hidden md:flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-[#F3D078]/30 px-3.5 py-2 rounded-full text-xs font-bold text-[#F3D078] transition"
                 >
                   <span>★</span>
                   <span>Smarta Mappar</span>
                 </button>
 
-                {/* Profil-avatar med dropdown-känsla (som i dina skärmdumpar) */}
                 <div
                   onClick={() => { setActiveTab('settings'); setIsFullscreenPlayer(false); }}
                   className="relative flex items-center gap-2 cursor-pointer group"
                   title="Inställningar & Konto"
                 >
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-red-700 via-red-600 to-amber-500 p-0.5 shadow-lg">
-                    <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center font-black text-xs text-white">
-                      {user.email ? user.email.substring(0, 2).toUpperCase() : 'MK'}
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-[#D4A346] via-[#F3D078] to-amber-200 p-0.5 shadow-lg">
+                    <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center font-black text-xs text-[#F3D078]">
+                      {user.email ? user.email.substring(0, 2).toUpperCase() : 'ZP'}
                     </div>
                   </div>
                   <span className="w-4 h-4 rounded-full bg-zinc-900 border border-white/20 flex items-center justify-center text-[9px] absolute -bottom-0.5 -right-0.5">
@@ -1554,7 +1645,7 @@
                           onClick={() => setPlayerEngine(eng.id)}
                           style={playerEngine === eng.id ? { backgroundColor: accentColor } : {}}
                           className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition ${
-                            playerEngine === eng.id ? 'text-white shadow' : 'text-zinc-400 hover:text-white'
+                            playerEngine === eng.id ? 'text-black font-extrabold shadow' : 'text-zinc-400 hover:text-white'
                           }`}
                         >
                           {eng.label}
@@ -1575,8 +1666,8 @@
                     />
                     {videoError && (
                       <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center space-y-4">
-                        <span className="bg-[#E50914] text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-white live-dot" />
+                        <span className="bg-[#F3D078] text-black text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-black live-dot" />
                           LIVE / STREAM
                         </span>
                         <p className="text-white font-bold text-base sm:text-lg max-w-md">
@@ -1612,8 +1703,14 @@
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-1 min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span style={{ backgroundColor: accentColor }} className="text-[10px] font-black uppercase px-2 py-0.5 rounded text-white">
-                            {currentMedia.type === 'live' ? 'LIVE' : currentMedia.type === 'series' ? 'SERIE' : 'VOD FILM'}
+                          <span style={{ backgroundColor: accentColor }} className="text-[10px] font-black uppercase px-2 py-0.5 rounded text-black">
+                            {currentMedia.type === 'live'
+                              ? 'LIVE TV'
+                              : currentMedia.type === 'vod_channel'
+                              ? 'VOD-KANAL'
+                              : currentMedia.type === 'series'
+                              ? 'SERIE'
+                              : 'FILM'}
                           </span>
                           {currentMedia.quality && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-white/20 text-zinc-300">
@@ -1625,19 +1722,21 @@
                         <h1 className="text-lg sm:text-2xl font-black text-white truncate">{currentMedia.name}</h1>
                         {activeChannelEpg?.currentProg ? (
                           <div className="pt-1 space-y-1">
-                            <p className="text-xs sm:text-sm text-amber-400 font-bold">
+                            <p className="text-xs sm:text-sm text-[#F3D078] font-bold">
                               Nu: {activeChannelEpg.currentProg.title}{' '}
                               <span className="text-zinc-400 font-normal">
                                 ({formatTime(activeChannelEpg.currentProg.start)} - {formatTime(activeChannelEpg.currentProg.stop)})
                               </span>
                             </p>
                             <div className="w-full max-w-md bg-white/10 h-1.5 rounded-full overflow-hidden">
-                              <div style={{ backgroundColor: accentColor }} className="h-full rounded-full" style={{ width: `${activeChannelEpg.progress}%`, backgroundColor: accentColor }} />
+                              <div className="h-full rounded-full" style={{ width: `${activeChannelEpg.progress}%`, backgroundColor: accentColor }} />
                             </div>
                           </div>
                         ) : (
                           <p className="text-xs text-zinc-500">
-                            {currentMedia.type === 'live' ? 'TV-guiden innehåller ingen information om programmet som visas just nu.' : `År: ${currentMedia.year || '2025'} • ★ ${currentMedia.rating || '8,1'}`}
+                            {currentMedia.type === 'live' || currentMedia.type === 'vod_channel'
+                              ? 'TV-guiden innehåller ingen information om programmet som visas just nu.'
+                              : `År: ${currentMedia.year || '2025'} • ★ ${currentMedia.rating || '8,1'}`}
                           </p>
                         )}
                       </div>
@@ -1645,7 +1744,7 @@
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setFavModalItem(currentMedia)}
-                          className="bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-white/10 px-4 py-2.5 rounded-xl text-xs font-extrabold transition"
+                          className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] border border-white/10 px-4 py-2.5 rounded-xl text-xs font-extrabold transition"
                         >
                           ★ Favoritmapp
                         </button>
@@ -1667,12 +1766,12 @@
                 </div>
               )}
 
-              {/* EXPANDERAD KATEGORI-VY (NÄR MAN KLICKAR PÅ "EXPANDERA" ELLER EN GENRE/ÅR) */}
+              {/* EXPANDERAD KATEGORI-VY */}
               {!isFullscreenPlayer && expandedCategory && (
                 <div className="px-4 sm:px-8 py-6 space-y-6">
                   <div className="flex items-center justify-between border-b border-white/10 pb-4">
                     <div>
-                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#E50914]">KATALOGVY</span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#F3D078]">KATALOGVY</span>
                       <h1 className="text-xl sm:text-2xl font-black text-white mt-0.5">
                         {expandedCategory.title} ({expandedCategory.items.length})
                       </h1>
@@ -1690,17 +1789,13 @@
                       <div
                         key={item.id}
                         onClick={() => handleCardSelect(item)}
-                        className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#E50914] cursor-pointer transition hover:scale-[1.03] flex flex-col justify-end"
+                        className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#F3D078] cursor-pointer transition hover:scale-[1.015] flex flex-col justify-end"
                       >
-                        {item.logo ? (
-                          <img src={item.logo} alt={item.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-3xl opacity-20">🎬</div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                        <div className="relative z-10 p-3 space-y-1 text-center">
-                          <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-[#E50914] text-white inline-block">
-                            {item.type === 'live' ? 'LIVE' : item.type === 'series' ? 'SERIE' : 'SPELA'}
+                        <SmartMediaImage src={item.logo} alt={item.name} mode="poster" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent z-10" />
+                        <div className="relative z-20 p-3 space-y-1 text-center">
+                          <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-[#F3D078] text-black inline-block">
+                            {item.type === 'live' ? 'LIVE' : item.type === 'vod_channel' ? 'VOD-KANAL' : item.type === 'series' ? 'SERIE' : 'FILM'}
                           </span>
                           <h3 className="font-bold text-xs text-white line-clamp-2">{item.name}</h3>
                         </div>
@@ -1711,7 +1806,7 @@
                   {expandedCategory.items.length > renderLimit && (
                     <button
                       onClick={() => setRenderLimit((prev) => prev + 100)}
-                      className="w-full py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-extrabold text-white transition"
+                      className="w-full py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-extrabold text-[#F3D078] transition"
                     >
                       Visa fler ({expandedCategory.items.length - renderLimit} kvar)...
                     </button>
@@ -1719,31 +1814,49 @@
                 </div>
               )}
 
-              {/* 1. FLIK: "FÖR DIG", "FILM" ELLER "SERIE" (NETFLIX / IPTVX STARTSIDA) */}
+              {/* 1. FLIK: "FÖR DIG", "FILMER" ELLER "SERIER" */}
               {!isFullscreenPlayer && !expandedCategory && (activeTab === 'home' || activeTab === 'movies' || activeTab === 'series') && (
                 <div className="space-y-8 pb-10">
                   
-                  {/* STOR HERO-BANNER HÖGST UPP (SOM "AUTUMN AT APPLE HILL" / "WILD ARABIA") */}
+                  {/* PROFFSIG HERO-BANNER UTAN INZOOMAD/KAPAD BILD */}
                   {heroItem && (
-                    <div className="relative w-full h-[360px] sm:h-[440px] flex flex-col justify-end overflow-hidden border-b border-white/5">
+                    <div className="relative w-full h-[360px] sm:h-[430px] flex flex-col justify-end overflow-hidden border-b border-white/5 bg-black">
                       {heroItem.logo ? (
-                        <img
-                          src={heroItem.logo}
-                          alt={heroItem.name}
-                          className="absolute inset-0 w-full h-full object-cover object-center scale-105 blur-[1px] opacity-65"
-                        />
+                        <>
+                          {/* Oskärpt bakgrund som fyller bredden mjukt */}
+                          <img
+                            src={heroItem.logo}
+                            alt=""
+                            aria-hidden="true"
+                            className="absolute inset-0 w-full h-full object-cover object-center blur-2xl opacity-35 scale-105"
+                          />
+                          {/* Skarp, o-inzoomad poster/bild i rätt proportioner */}
+                          <img
+                            src={heroItem.logo}
+                            alt={heroItem.name}
+                            className="absolute inset-0 w-full h-full object-contain object-center opacity-80 p-4"
+                          />
+                        </>
                       ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-red-950/60 via-zinc-900 to-black" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-950/60 via-zinc-900 to-black" />
                       )}
                       <div className="absolute inset-0 hero-vignette" />
 
-                      <div className="relative z-10 max-w-3xl mx-auto w-full px-6 pb-8 text-center space-y-4">
-                        <h1 className="text-2xl sm:text-5xl font-black tracking-tight text-white drop-shadow-[0_6px_25px_rgba(0,0,0,0.9)] line-clamp-2">
+                      <div className="relative z-10 max-w-3xl mx-auto w-full px-6 pb-8 text-center space-y-3.5">
+                        <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-[0_6px_25px_rgba(0,0,0,0.95)] line-clamp-2">
                           {heroItem.seriesTitle || heroItem.name}
                         </h1>
 
                         <div className="flex items-center justify-center gap-3 text-xs sm:text-sm font-semibold text-zinc-300">
-                          <span>{heroItem.type === 'series' ? 'TV-Serie' : heroItem.type === 'movies' ? ' Bio-Film' : 'Live TV'}</span>
+                          <span>
+                            {heroItem.type === 'series'
+                              ? 'TV-Serie'
+                              : heroItem.type === 'movies'
+                              ? 'Bio-Film'
+                              : heroItem.type === 'vod_channel'
+                              ? 'VOD-Kanal'
+                              : 'Live TV'}
+                          </span>
                           <span>•</span>
                           <span>{heroItem.year || '2025'}</span>
                           {heroItem.quality && (
@@ -1753,14 +1866,13 @@
                             </>
                           )}
                           <span>•</span>
-                          <span className="text-amber-400 font-bold">★ {heroItem.rating || '8,2'}</span>
+                          <span className="text-[#F3D078] font-bold">★ {heroItem.rating || '8,2'}</span>
                         </div>
 
-                        {/* Tre runda/ovala knappar som i IPTVX: Stjärna, Vit "Spela upp", Info */}
                         <div className="flex items-center justify-center gap-5 pt-2">
                           <button
                             onClick={() => setFavModalItem(heroItem)}
-                            className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-lg text-white transition"
+                            className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-lg text-[#F3D078] transition"
                             title="Lägg till i favoriter"
                           >
                             ☆
@@ -1768,7 +1880,8 @@
 
                           <button
                             onClick={() => handleCardSelect(heroItem)}
-                            className="bg-white hover:bg-zinc-200 text-black font-extrabold px-8 py-3.5 rounded-full text-sm flex items-center gap-2.5 shadow-[0_10px_30px_rgba(255,255,255,0.25)] hover:scale-105 transition"
+                            style={{ backgroundColor: accentColor }}
+                            className="hover:brightness-110 text-black font-extrabold px-8 py-3.5 rounded-full text-sm flex items-center gap-2.5 shadow-[0_10px_30px_rgba(243,208,120,0.3)] hover:scale-105 transition"
                           >
                             <span>▶</span>
                             <span>Spela upp</span>
@@ -1786,18 +1899,17 @@
                     </div>
                   )}
 
-                  {/* Om användaren inte har laddat in någon spellista ännu */}
-                  {channels.length <= 2 && movies.length === 0 && series.length === 0 && (
-                    <div className="mx-4 sm:mx-8 p-6 rounded-2xl bg-gradient-to-r from-red-950/50 via-zinc-900 to-zinc-950 border border-red-500/30 flex flex-wrap items-center justify-between gap-4">
+                  {channels.length <= 2 && movies.length === 0 && series.length === 0 && vodChannels.length === 0 && (
+                    <div className="mx-4 sm:mx-8 p-6 rounded-2xl bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 border border-[#F3D078]/30 flex flex-wrap items-center justify-between gap-4">
                       <div className="space-y-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">KOM IGÅNG DIREKT</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#F3D078]">VÄLKOMMEN TILL ZAPPAPORTALEN</span>
                         <h3 className="text-base sm:text-lg font-extrabold text-white">Ladda in din M3U-spellista & EPG</h3>
-                        <p className="text-xs text-zinc-400">Din spellista sparas lokalt i appens höghastighets-cache så att du aldrig behöver ladda om den.</p>
+                        <p className="text-xs text-zinc-400">Din spellista sorteras automatiskt i Live TV, VOD-kanaler, Filmer och Serier.</p>
                       </div>
                       <button
                         onClick={() => { setActiveTab('settings'); setSettingsSubView('sources'); }}
                         style={{ backgroundColor: accentColor }}
-                        className="px-5 py-3 rounded-xl text-xs font-extrabold text-white shadow-lg hover:brightness-110 transition"
+                        className="px-5 py-3 rounded-xl text-xs font-extrabold text-black shadow-lg hover:brightness-110 transition"
                       >
                         + Spellista Hantering
                       </button>
@@ -1818,7 +1930,7 @@
                     />
                   )}
 
-                  {/* RAD 2: DINA SMARTA MAPPAR & FAVORITER */}
+                  {/* RAD 2: FAVORITER */}
                   {allFavoriteItemsCombined.length > 0 && (
                     <MediaCarouselRow
                       title="Favoriter"
@@ -1831,10 +1943,51 @@
                     />
                   )}
 
-                  {/* RAD 3: SENAST SEDDA LIVE-KANALER (IPTVX KORT) */}
+                  {/* RAD 3: NYLIGEN TILLAGDA FILMER (SORTERADE EFTER UPPLADDNINGSTID - SENASTE FÖRST) */}
+                  {(activeTab === 'home' || activeTab === 'movies') && recentlyAddedMovies.length > 0 && (
+                    <MediaCarouselRow
+                      title="Nyligen tillagda filmer"
+                      subtitle="Sorterade efter uppladdningstid – senaste filmen först"
+                      items={recentlyAddedMovies.slice(0, 35)}
+                      type="poster"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda filmer (Senaste först)', items: recentlyAddedMovies })}
+                    />
+                  )}
+
+                  {/* RAD 4: NYLIGEN TILLAGDA SERIER (SORTERADE EFTER SENASTE UPPLADDADE AVSNITT) */}
+                  {(activeTab === 'home' || activeTab === 'series') && recentlyAddedSeries.length > 0 && (
+                    <MediaCarouselRow
+                      title="Nyligen tillagda serier"
+                      subtitle="Sorterade efter senaste uppladdade avsnitt"
+                      items={recentlyAddedSeries.slice(0, 35)}
+                      type="poster"
+                      onSelect={handleCardSelect}
+                      onFavClick={setFavModalItem}
+                      favItemIds={allFavoritedIds}
+                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda serier (Senaste först)', items: recentlyAddedSeries })}
+                    />
+                  )}
+
+                  {/* RAD 5: VOD-KANALER (SEPARERADE FRÅN FILMER) */}
+                  {activeTab === 'home' && vodChannels.length > 0 && (
+                    <MediaCarouselRow
+                      title="VOD-kanaler & 24/7"
+                      subtitle="Dedikerade film- och maratonkanaler"
+                      items={vodChannels.slice(0, 25)}
+                      type="live-card"
+                      onSelect={handleCardSelect}
+                      getChannelEpg={getChannelEpg}
+                      onExpand={() => setActiveTab('vod_channels')}
+                    />
+                  )}
+
+                  {/* RAD 6: SENAST SEDDA & POPULÄRA LIVE-KANALER */}
                   {activeTab === 'home' && channels.length > 0 && (
                     <MediaCarouselRow
-                      title="Senast sedda & Populära Kanaler"
+                      title="Live TV & Populära Kanaler"
                       items={watchHistory.filter((x) => x.type === 'live').concat(channels).slice(0, 20)}
                       type="live-card"
                       onSelect={handleCardSelect}
@@ -1843,11 +1996,11 @@
                     />
                   )}
 
-                  {/* RAD 4: TRENDIG DENNA VECKA (MED STORA SIFFROR 1, 2, 3...) */}
-                  {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (
+                  {/* RAD 7: TRENDIG DENNA VECKA */}
+                  {(activeTab === 'home' || activeTab === 'movies') && recentlyAddedMovies.length > 0 && (
                     <MediaCarouselRow
-                      title="Trendig denna vecka"
-                      items={movies.slice(0, 10)}
+                      title="Trendiga filmer denna vecka"
+                      items={recentlyAddedMovies.slice(0, 10)}
                       type="rank"
                       onSelect={handleCardSelect}
                       onFavClick={setFavModalItem}
@@ -1855,10 +2008,10 @@
                     />
                   )}
 
-                  {activeTab === 'series' && groupedSeriesCatalog.length > 0 && (
+                  {activeTab === 'series' && recentlyAddedSeries.length > 0 && (
                     <MediaCarouselRow
                       title="Trendiga serier denna vecka"
-                      items={groupedSeriesCatalog.slice(0, 10)}
+                      items={recentlyAddedSeries.slice(0, 10)}
                       type="rank"
                       onSelect={handleCardSelect}
                       onFavClick={setFavModalItem}
@@ -1866,32 +2019,6 @@
                     />
                   )}
 
-                  {/* RAD 5: NYLIGEN TILLAGDA */}
-                  {(activeTab === 'home' || activeTab === 'movies') && movies.length > 0 && (
-                    <MediaCarouselRow
-                      title="Nyligen tillagda filmer"
-                      items={movies.slice(-30).reverse()}
-                      type="poster"
-                      onSelect={handleCardSelect}
-                      onFavClick={setFavModalItem}
-                      favItemIds={allFavoritedIds}
-                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda filmer', items: movies.slice().reverse() })}
-                    />
-                  )}
-
-                  {(activeTab === 'home' || activeTab === 'series') && groupedSeriesCatalog.length > 0 && (
-                    <MediaCarouselRow
-                      title="Nyligen tillagda serier"
-                      items={groupedSeriesCatalog.slice(-30).reverse()}
-                      type="poster"
-                      onSelect={handleCardSelect}
-                      onFavClick={setFavModalItem}
-                      favItemIds={allFavoritedIds}
-                      onExpand={() => setExpandedCategory({ title: 'Nyligen tillagda serier', items: groupedSeriesCatalog })}
-                    />
-                  )}
-
-                  {/* RAD 6: UTFORSKA EFTER GENRE (SOM I DINA SKÄRMDUMPAR) */}
                   <section className="space-y-2.5 px-4 sm:px-8">
                     <h2 className="text-base sm:text-lg font-extrabold text-white">Utforska efter genre</h2>
                     <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar py-1">
@@ -1899,16 +2026,15 @@
                         <div
                           key={g.id}
                           onClick={() => openGenreFilter(g)}
-                          className={`shrink-0 w-52 sm:w-60 h-28 sm:h-32 rounded-2xl bg-gradient-to-br ${g.gradient} border border-white/15 hover:border-white cursor-pointer p-4 flex flex-col justify-between relative overflow-hidden group transition hover:scale-[1.03] shadow-lg`}
+                          className={`shrink-0 w-52 sm:w-60 h-28 sm:h-32 rounded-2xl bg-gradient-to-br ${g.gradient} border border-white/15 hover:border-[#F3D078] cursor-pointer p-4 flex flex-col justify-between relative overflow-hidden group transition hover:scale-[1.02] shadow-lg`}
                         >
-                          <span className="text-3xl opacity-80 group-hover:scale-125 transition">{g.icon}</span>
+                          <span className="text-3xl opacity-80">{g.icon}</span>
                           <span className="text-base sm:text-lg font-black tracking-wide text-white drop-shadow">{g.label}</span>
                         </div>
                       ))}
                     </div>
                   </section>
 
-                  {/* RAD 7: UTFORSKA EFTER ÅR (2026, 2025, 2024...) */}
                   <section className="space-y-2.5 px-4 sm:px-8">
                     <h2 className="text-base sm:text-lg font-extrabold text-white">Utforska efter år</h2>
                     <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar py-1">
@@ -1916,9 +2042,9 @@
                         <div
                           key={yr}
                           onClick={() => openYearFilter(yr)}
-                          className="shrink-0 w-48 sm:w-56 h-24 sm:h-28 rounded-2xl bg-gradient-to-tr from-zinc-950 via-zinc-900 to-blue-950/70 border border-white/15 hover:border-[#E50914] cursor-pointer flex items-center justify-center relative overflow-hidden group transition hover:scale-[1.03] shadow-lg"
+                          className="shrink-0 w-48 sm:w-56 h-24 sm:h-28 rounded-2xl bg-gradient-to-tr from-zinc-950 via-zinc-900 to-amber-950/50 border border-white/15 hover:border-[#F3D078] cursor-pointer flex items-center justify-center relative overflow-hidden group transition hover:scale-[1.02] shadow-lg"
                         >
-                          <span className="text-3xl sm:text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-200 to-zinc-500 group-hover:scale-110 transition">
+                          <span className="text-3xl sm:text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white via-[#F3D078] to-amber-600">
                             {yr}
                           </span>
                         </div>
@@ -1926,7 +2052,6 @@
                     </div>
                   </section>
 
-                  {/* DYNAMISKA VOD- & SERIE-KATEGORIER FRÅN LEVERANTÖREN */}
                   {(activeTab === 'home' || activeTab === 'movies') &&
                     movieGroups.slice(0, activeTab === 'movies' ? 25 : 8).map(([grpName, grpItems]) => (
                       <MediaCarouselRow
@@ -1957,16 +2082,148 @@
                 </div>
               )}
 
-              {/* 2. FLIK: LIVE TV (MED SMARTA MAPPAR & KATEGORIER) */}
+              {/* 2. NY SEPARAT FLIK: VOD-KANALER (SKILJT FRÅN RIKTIGA FILMER) */}
+              {!isFullscreenPlayer && !expandedCategory && activeTab === 'vod_channels' && (
+                <div className="px-4 sm:px-8 py-5 space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#F3D078]">24/7 & BIOKANALER</span>
+                        <h1 className="text-xl sm:text-2xl font-black text-white">VOD-kanaler ({vodChannels.length} st)</h1>
+                      </div>
+                      <button
+                        onClick={() => setManageFavModal(true)}
+                        className="text-xs font-extrabold text-[#F3D078] bg-[#F3D078]/10 border border-[#F3D078]/30 px-3.5 py-2 rounded-xl"
+                      >
+                        ★ Smarta Mappar
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                      <button
+                        onClick={() => { setSelectedVodChGroup('ALL'); setRenderLimit(80); }}
+                        style={selectedVodChGroup === 'ALL' ? { backgroundColor: accentColor } : {}}
+                        className={`px-4 py-2 rounded-full text-xs font-extrabold shrink-0 transition ${
+                          selectedVodChGroup === 'ALL' ? 'text-black' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+                        }`}
+                      >
+                        Alla VOD-kanaler ({vodChannels.length})
+                      </button>
+
+                      {Object.keys(vodChannelGroups).map((grp) => (
+                        <button
+                          key={grp}
+                          onClick={() => { setSelectedVodChGroup(grp); setRenderLimit(80); }}
+                          style={selectedVodChGroup === grp ? { backgroundColor: accentColor } : {}}
+                          className={`px-4 py-2 rounded-full text-xs font-bold shrink-0 transition ${
+                            selectedVodChGroup === grp ? 'text-black font-extrabold' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+                          }`}
+                        >
+                          {grp} ({vodChannelGroups[grp].length})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {vodChannels.length === 0 ? (
+                    <div className="p-8 rounded-2xl bg-[#111215] border border-white/10 text-center space-y-2">
+                      <p className="text-sm font-bold text-white">Inga separata VOD-kanaler hittades i din nuvarande spellista</p>
+                      <p className="text-xs text-zinc-400">Dina on-demand-filmer ligger under fliken "Filmer" och vanliga TV-kanaler under "Live TV".</p>
+                    </div>
+                  ) : (
+                    (() => {
+                      const list = selectedVodChGroup === 'ALL' ? vodChannels : vodChannelGroups[selectedVodChGroup] || [];
+                      return (
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                            {list.slice(0, renderLimit).map((ch) => {
+                              const epg = getChannelEpg(ch);
+                              const isPlaying = currentMedia?.id === ch.id;
+                              return (
+                                <div
+                                  key={ch.id}
+                                  onClick={() => startPlayback(ch, true)}
+                                  className={`rounded-2xl bg-[#111215] border p-4 flex flex-col justify-between cursor-pointer transition hover:scale-[1.01] ${
+                                    isPlaying ? 'border-[#F3D078] shadow-[0_0_20px_rgba(243,208,120,0.25)]' : 'border-white/10 hover:border-white/30'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      <div className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center p-1.5 shrink-0">
+                                        {ch.logo ? (
+                                          <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                                        ) : (
+                                          <span className="text-xs font-black text-[#F3D078]">VOD</span>
+                                        )}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <h3 className="text-xs sm:text-sm font-bold text-white truncate">{ch.name}</h3>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          {ch.quality && (
+                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded border border-white/20 text-zinc-300">
+                                              {ch.quality}
+                                            </span>
+                                          )}
+                                          <span className="text-[10px] text-zinc-400 truncate">{ch.group}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFavModalItem(ch);
+                                      }}
+                                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                                        allFavoritedIds.has(ch.id) ? 'bg-[#F3D078] text-black font-black' : 'bg-white/5 text-zinc-400 hover:text-white'
+                                      }`}
+                                    >
+                                      ★
+                                    </button>
+                                  </div>
+
+                                  <div className="mt-3 pt-2.5 border-t border-white/5 space-y-1">
+                                    {epg?.currentProg ? (
+                                      <>
+                                        <div className="flex justify-between text-[10px] text-zinc-400">
+                                          <span>{formatTime(epg.currentProg.start)} - {formatTime(epg.currentProg.stop)}</span>
+                                          <span>{epg.progress}%</span>
+                                        </div>
+                                        <p className="text-xs font-bold text-white truncate">{epg.currentProg.title}</p>
+                                      </>
+                                    ) : (
+                                      <p className="text-[11px] text-[#F3D078]/80 font-medium">24/7 VOD-ström</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {list.length > renderLimit && (
+                            <button
+                              onClick={() => setRenderLimit((prev) => prev + 100)}
+                              className="w-full py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-extrabold text-[#F3D078] transition"
+                            >
+                              Visa fler VOD-kanaler ({list.length - renderLimit} kvar)...
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()
+                  )}
+                </div>
+              )}
+
+              {/* 3. FLIK: LIVE TV */}
               {!isFullscreenPlayer && !expandedCategory && activeTab === 'live' && (
                 <div className="px-4 sm:px-8 py-5 space-y-6">
-                  {/* Horisontell mappväljare */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h1 className="text-xl sm:text-2xl font-black text-white">Live TV ({channels.length} kanaler)</h1>
                       <button
                         onClick={() => setManageFavModal(true)}
-                        className="text-xs font-extrabold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3.5 py-2 rounded-xl"
+                        className="text-xs font-extrabold text-[#F3D078] bg-[#F3D078]/10 border border-[#F3D078]/30 px-3.5 py-2 rounded-xl"
                       >
                         ★ Hantera Smarta Mappar
                       </button>
@@ -1977,7 +2234,7 @@
                         onClick={() => { setSelectedLiveGroup('ALL'); setRenderLimit(80); }}
                         style={selectedLiveGroup === 'ALL' ? { backgroundColor: accentColor } : {}}
                         className={`px-4 py-2 rounded-full text-xs font-extrabold shrink-0 transition ${
-                          selectedLiveGroup === 'ALL' ? 'text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+                          selectedLiveGroup === 'ALL' ? 'text-black' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
                         }`}
                       >
                         Alla kanaler ({channels.length})
@@ -1990,8 +2247,8 @@
                           style={selectedLiveGroup === 'FAV:' + fl.id ? { backgroundColor: accentColor } : {}}
                           className={`px-4 py-2 rounded-full text-xs font-extrabold shrink-0 transition flex items-center gap-1.5 ${
                             selectedLiveGroup === 'FAV:' + fl.id
-                              ? 'text-white'
-                              : 'bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20'
+                              ? 'text-black'
+                              : 'bg-[#F3D078]/10 text-[#F3D078] border border-[#F3D078]/30 hover:bg-[#F3D078]/20'
                           }`}
                         >
                           <span>★ {fl.name}</span>
@@ -2005,7 +2262,7 @@
                           onClick={() => { setSelectedLiveGroup(grp); setRenderLimit(80); }}
                           style={selectedLiveGroup === grp ? { backgroundColor: accentColor } : {}}
                           className={`px-4 py-2 rounded-full text-xs font-bold shrink-0 transition ${
-                            selectedLiveGroup === grp ? 'text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+                            selectedLiveGroup === grp ? 'text-black font-extrabold' : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
                           }`}
                         >
                           {grp} ({liveGroups[grp].length})
@@ -2014,7 +2271,6 @@
                     </div>
                   </div>
 
-                  {/* Kanalkort i IPTVX-stil */}
                   {(() => {
                     const list =
                       selectedLiveGroup === 'ALL'
@@ -2034,7 +2290,7 @@
                                 key={ch.id}
                                 onClick={() => startPlayback(ch, true)}
                                 className={`rounded-2xl bg-[#111215] border p-4 flex flex-col justify-between cursor-pointer transition hover:scale-[1.01] ${
-                                  isPlaying ? 'border-[#E50914] shadow-[0_0_20px_rgba(229,9,20,0.25)]' : 'border-white/10 hover:border-white/30'
+                                  isPlaying ? 'border-[#F3D078] shadow-[0_0_20px_rgba(243,208,120,0.25)]' : 'border-white/10 hover:border-white/30'
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-3">
@@ -2043,7 +2299,7 @@
                                       {ch.logo ? (
                                         <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
                                       ) : (
-                                        <span className="text-xs font-black text-[#E50914]">LIVE</span>
+                                        <span className="text-xs font-black text-[#F3D078]">LIVE</span>
                                       )}
                                     </div>
                                     <div className="min-w-0 flex-1">
@@ -2065,7 +2321,7 @@
                                       setFavModalItem(ch);
                                     }}
                                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${
-                                      allFavoritedIds.has(ch.id) ? 'bg-[#E50914] text-white' : 'bg-white/5 text-zinc-400 hover:text-white'
+                                      allFavoritedIds.has(ch.id) ? 'bg-[#F3D078] text-black font-black' : 'bg-white/5 text-zinc-400 hover:text-white'
                                     }`}
                                   >
                                     ★
@@ -2096,7 +2352,7 @@
                         {list.length > renderLimit && (
                           <button
                             onClick={() => setRenderLimit((prev) => prev + 100)}
-                            className="w-full py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-extrabold text-white transition"
+                            className="w-full py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-xs font-extrabold text-[#F3D078] transition"
                           >
                             Visa fler kanaler ({list.length - renderLimit} kvar)...
                           </button>
@@ -2107,15 +2363,13 @@
                 </div>
               )}
 
-              {/* 3. FLIK: TV-GUIDE (EXAKT SOM IPTVX MED TOPP-PREVIEW + TIDSLINJE-TABELL) */}
+              {/* 4. FLIK: TV-GUIDE */}
               {!isFullscreenPlayer && activeTab === 'epg' && (
                 <div className="max-w-5xl mx-auto px-4 sm:px-8 py-4 space-y-5">
-                  
-                  {/* Topp-preview ruta (som i IMG_2601) */}
                   <div className="rounded-2xl bg-[#0B0C0E] border border-white/15 overflow-hidden shadow-2xl">
                     <div className="relative aspect-video max-h-[260px] w-full bg-black flex items-center justify-center">
-                      <span className="absolute top-3 left-3 z-20 bg-[#E50914] text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow">
-                        <span className="w-2 h-2 rounded-full bg-white live-dot" />
+                      <span className="absolute top-3 left-3 z-20 bg-[#F3D078] text-black text-[10px] font-black uppercase px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow">
+                        <span className="w-2 h-2 rounded-full bg-black live-dot" />
                         LIVE
                       </span>
                       {currentMedia ? (
@@ -2123,7 +2377,8 @@
                           <p className="text-sm sm:text-base font-extrabold text-white">{currentMedia.name}</p>
                           <button
                             onClick={() => setIsFullscreenPlayer(true)}
-                            className="bg-white text-black font-extrabold px-5 py-2 rounded-full text-xs shadow"
+                            style={{ backgroundColor: accentColor }}
+                            className="text-black font-extrabold px-5 py-2 rounded-full text-xs shadow"
                           >
                             ▶ Öppna i fullskärm
                           </button>
@@ -2137,7 +2392,7 @@
                       <h2 className="text-base sm:text-lg font-extrabold text-white truncate">
                         {currentMedia ? currentMedia.name : 'Ingen kanal vald'}
                       </h2>
-                      <p className="text-xs sm:text-sm font-bold text-zinc-300">
+                      <p className="text-xs sm:text-sm font-bold text-[#F3D078]">
                         {activeChannelEpg?.currentProg ? activeChannelEpg.currentProg.title : 'EPG inte tillgänglig'}
                       </p>
                       <p className="text-xs text-zinc-500 line-clamp-2">
@@ -2159,10 +2414,9 @@
                     </div>
                   </div>
 
-                  {/* Sök & IDAG-indikator */}
                   <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-3">
                     <div className="flex items-center gap-6">
-                      <span style={{ color: accentColor }} className="text-xs sm:text-sm font-black uppercase tracking-wider border-b-2 border-[#E50914] pb-1">
+                      <span style={{ color: accentColor }} className="text-xs sm:text-sm font-black uppercase tracking-wider border-b-2 border-[#F3D078] pb-1">
                         IDAG
                       </span>
                       <span className="text-xs sm:text-sm font-bold text-zinc-400">
@@ -2174,11 +2428,10 @@
                       placeholder="Sök kanal i TV-guiden..."
                       value={epgSearch}
                       onChange={(e) => setEpgSearch(e.target.value)}
-                      className="w-full sm:w-64 bg-zinc-900 border border-white/15 focus:border-[#E50914] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                      className="w-full sm:w-64 bg-zinc-900 border border-white/15 focus:border-[#F3D078] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
                     />
                   </div>
 
-                  {/* IPTVX Tvåkolumns EPG-lista */}
                   <div className="space-y-2.5">
                     {channels
                       .filter((ch) => !epgSearch || ch.name.toLowerCase().includes(epgSearch.toLowerCase()))
@@ -2189,15 +2442,14 @@
                           <div
                             key={ch.id}
                             onClick={() => startPlayback(ch, true)}
-                            className="grid grid-cols-12 rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#E50914] cursor-pointer transition"
+                            className="grid grid-cols-12 rounded-xl overflow-hidden bg-[#121316] border border-white/10 hover:border-[#F3D078] cursor-pointer transition"
                           >
-                            {/* Vänster kolumn: Kanalinfo */}
                             <div className="col-span-5 sm:col-span-4 p-3.5 bg-[#16181C] flex items-center gap-3 border-r border-white/10">
                               <div className="w-10 h-10 rounded-lg bg-black border border-white/10 flex items-center justify-center p-1 shrink-0">
                                 {ch.logo ? (
                                   <img src={ch.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
                                 ) : (
-                                  <span className="text-[10px] font-black text-[#E50914]">TV</span>
+                                  <span className="text-[10px] font-black text-[#F3D078]">TV</span>
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
@@ -2208,18 +2460,17 @@
                                       {ch.quality}
                                     </span>
                                   )}
-                                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-[#E50914]/20 text-red-300">
+                                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-[#F3D078]/20 text-[#F3D078]">
                                     LIVE
                                   </span>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Höger kolumn: Rödtonad programtablå */}
-                            <div className="col-span-7 sm:col-span-8 p-3.5 bg-gradient-to-r from-[#451010]/70 via-[#290909]/60 to-[#180707]/60 flex flex-col justify-center">
+                            <div className="col-span-7 sm:col-span-8 p-3.5 bg-gradient-to-r from-[#2c2208]/70 via-[#1a1405]/60 to-[#0d0a03]/60 flex flex-col justify-center">
                               {info?.currentProg ? (
                                 <>
-                                  <span className="text-[10px] font-bold text-red-200/80">
+                                  <span className="text-[10px] font-bold text-[#F3D078]/80">
                                     {formatTime(info.currentProg.start)} - {formatTime(info.currentProg.stop)}
                                   </span>
                                   <p className="text-xs sm:text-sm font-extrabold text-white truncate mt-0.5">
@@ -2247,24 +2498,22 @@
                 </div>
               )}
 
-              {/* 4. FLIK: INSTÄLLNINGAR (EXAKT SOM IMG_2603 & IMG_2604 MED "PRENUMERANT"-BADGE) */}
+              {/* 5. FLIK: INSTÄLLNINGAR */}
               {!isFullscreenPlayer && activeTab === 'settings' && (
                 <div className="max-w-2xl mx-auto px-4 sm:px-8 py-6 space-y-6">
                   
-                  {/* Gul/Guld PRENUMERANT-badge högst upp */}
                   <div className="flex flex-col items-center justify-center space-y-2 pt-2">
-                    <span className="bg-[#F59E0B] text-black font-black text-xs sm:text-sm tracking-wider uppercase px-5 py-1.5 rounded-full shadow-[0_0_25px_rgba(245,158,11,0.4)]">
-                      PRENUMERANT • ROYAL EDITION
+                    <span className="bg-[#F3D078] text-black font-black text-xs sm:text-sm tracking-wider uppercase px-5 py-1.5 rounded-full shadow-[0_0_25px_rgba(243,208,120,0.4)]">
+                      PRENUMERANT • ZAPPAPORTALEN.SE
                     </span>
                     <span className="text-xs text-zinc-400">{user.email}</span>
                   </div>
 
-                  {/* Undervyer i Inställningar */}
                   {settingsSubView === 'sources' ? (
                     <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-6">
                       <div className="flex items-center justify-between border-b border-white/10 pb-3">
                         <h2 className="text-base font-extrabold text-white">📂 Spellista Hantering & EPG</h2>
-                        <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#E50914]">
+                        <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#F3D078]">
                           ← Tillbaka
                         </button>
                       </div>
@@ -2276,7 +2525,7 @@
                             type="file"
                             accept=".m3u,.m3u8,.txt"
                             onChange={handleFileUpload}
-                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#E50914] file:text-white file:font-bold cursor-pointer"
+                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#F3D078] file:text-black file:font-extrabold cursor-pointer"
                           />
                         </div>
 
@@ -2289,7 +2538,7 @@
                             onChange={(e) => setM3uUrl(e.target.value)}
                             className="w-full bg-zinc-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
                           />
-                          <button type="submit" style={{ backgroundColor: accentColor }} className="w-full py-2.5 rounded-xl text-xs font-extrabold text-white">
+                          <button type="submit" style={{ backgroundColor: accentColor }} className="w-full py-2.5 rounded-xl text-xs font-extrabold text-black">
                             Hämta & Cachelagra Spellista
                           </button>
                         </form>
@@ -2300,7 +2549,7 @@
                             type="file"
                             accept=".xml"
                             onChange={handleEpgFileUpload}
-                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-zinc-800 file:text-white file:font-bold cursor-pointer mb-2"
+                            className="block w-full text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-zinc-800 file:text-[#F3D078] file:font-bold cursor-pointer mb-2"
                           />
                           <div className="flex gap-2">
                             <input
@@ -2313,7 +2562,7 @@
                             <button
                               type="button"
                               onClick={() => loadEpgFromUrl(epgUrl)}
-                              className="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-xs font-bold"
+                              className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] px-4 py-2 rounded-xl text-xs font-bold"
                             >
                               Ladda EPG
                             </button>
@@ -2321,7 +2570,7 @@
                         </div>
 
                         {(statusMsg || epgStatus) && (
-                          <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold text-emerald-300 text-center">
+                          <div className="p-3.5 rounded-xl bg-amber-950/60 border border-[#F3D078]/40 text-xs font-bold text-[#F3D078] text-center">
                             {statusMsg || epgStatus}
                           </div>
                         )}
@@ -2331,7 +2580,7 @@
                     <div className="bg-[#111215] border border-white/10 rounded-2xl p-6 space-y-5">
                       <div className="flex items-center justify-between border-b border-white/10 pb-3">
                         <h2 className="text-base font-extrabold text-white">🎨 Tillägg: teman och utseende</h2>
-                        <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#E50914]">
+                        <button onClick={() => setSettingsSubView(null)} className="text-xs font-bold text-[#F3D078]">
                           ← Tillbaka
                         </button>
                       </div>
@@ -2340,16 +2589,16 @@
                         <div className="flex items-center justify-between p-4 rounded-xl bg-black/50 border border-white/10">
                           <div>
                             <p className="text-sm font-bold text-white">Färgtema</p>
-                            <p className="text-xs text-zinc-400">Välj mellan IPTVX Crimson Red eller MagnersKing Royal Gold</p>
+                            <p className="text-xs text-zinc-400">Välj mellan AIK Fotboll Gul eller Klassisk Guld</p>
                           </div>
                           <div className="flex gap-2">
                             <button
-                              onClick={() => setAccentTheme('crimson')}
+                              onClick={() => setAccentTheme('aik')}
                               className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border ${
-                                accentTheme === 'crimson' ? 'bg-[#E50914] text-white border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
+                                accentTheme === 'aik' ? 'bg-[#F3D078] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
                               }`}
                             >
-                              🔴 IPTVX Röd
+                              🟡 AIK Gul
                             </button>
                             <button
                               onClick={() => setAccentTheme('gold')}
@@ -2357,7 +2606,7 @@
                                 accentTheme === 'gold' ? 'bg-[#D4A346] text-black border-white' : 'bg-zinc-900 text-zinc-400 border-white/10'
                               }`}
                             >
-                              👑 Royal Guld
+                              👑 Klassisk Guld
                             </button>
                           </div>
                         </div>
@@ -2370,7 +2619,7 @@
                           <button
                             onClick={() => setTvMode(!tvMode)}
                             className={`px-4 py-2 rounded-xl text-xs font-extrabold ${
-                              tvMode ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300'
+                              tvMode ? 'bg-[#F3D078] text-black' : 'bg-zinc-800 text-zinc-300'
                             }`}
                           >
                             {tvMode ? 'PÅ' : 'AV'}
@@ -2379,10 +2628,9 @@
                       </div>
                     </div>
                   ) : (
-                    /* IPTVX Menylista med röda ikoner till vänster och › till höger */
                     <div className="bg-[#0B0C0E] border border-white/10 rounded-2xl divide-y divide-white/10 overflow-hidden shadow-2xl">
                       {[
-                        { icon: '👑', label: 'In-App-köp & Kvittot (Royal Active)', action: () => alert('MAGNERSKING Royal Cinema Edition är aktiverad på ditt konto.') },
+                        { icon: '👑', label: 'Konto & Status (Zappaportalen Active)', action: () => alert('Zappaportalen (zappaportalen.se) är aktiverad på ditt konto.') },
                         { icon: '🎨', label: 'Tillägg: teman och utseende', action: () => setSettingsSubView('appearance') },
                         { icon: '☁️', label: 'Moln-synkronisering (Supabase Cloud)', action: () => { saveToCloud(favLists); alert('Dina Smarta Mappar är synkroniserade med molnet!'); } },
                         { icon: '✨', label: 'AI & Smarta Favoritmappar', action: () => setManageFavModal(true) },
@@ -2394,7 +2642,7 @@
                         }},
                         { icon: '📡', label: 'Live & TV-guide', action: () => setActiveTab('epg') },
                         { icon: '📝', label: 'Metadata & Rensa Lokal Cache', action: handleClearCache },
-                        { icon: '🖥️', label: 'MAGNERSKING Media Server & VLC Bridge', action: () => alert('VLC och PotPlayer-bryggan är redo. Klicka på "Spela i VLC" under valfri kanal för direktuppspelning.') },
+                        { icon: '🖥️', label: 'Zappaportalen Media Server & VLC Bridge', action: () => alert('VLC och PotPlayer-bryggan är redo. Klicka på "Spela i VLC" under valfri kanal för direktuppspelning.') },
                         { icon: '⚙️', label: `Generali (TV-läge: ${tvMode ? 'PÅ' : 'AV'})`, action: () => setTvMode(!tvMode) },
                         { icon: '🚪', label: 'Logga ut från konto', action: handleLogout }
                       ].map((row, i) => (
@@ -2407,7 +2655,7 @@
                             <span style={{ color: accentColor }} className="text-lg w-6 text-center">
                               {row.icon}
                             </span>
-                            <span className="text-sm font-semibold text-white group-hover:text-red-400 transition">
+                            <span className="text-sm font-semibold text-white group-hover:text-[#F3D078] transition">
                               {row.label}
                             </span>
                           </div>
@@ -2418,24 +2666,23 @@
                   )}
 
                   <div className="text-center pt-4">
-                    <span className="text-xs text-zinc-600 font-semibold">Version 25.0.7 • MAGNERSKING Royal Edition</span>
+                    <span className="text-xs text-zinc-600 font-semibold">Version 25.2.0 • Zappaportalen (zappaportalen.se)</span>
                   </div>
                 </div>
               )}
             </main>
           ) : (
-            /* Ej inloggad vy */
             <div className="flex-1 flex items-center justify-center p-6 z-10">
-              <div className="bg-[#111215] p-10 rounded-3xl text-center space-y-4 max-w-sm border border-white/10 shadow-2xl">
-                <div style={{ backgroundColor: accentColor }} className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-lg">
-                  👑
+              <div className="bg-[#111215] p-10 rounded-3xl text-center space-y-4 max-w-sm border border-[#F3D078]/30 shadow-2xl">
+                <div style={{ backgroundColor: accentColor }} className="w-16 h-16 rounded-full border-2 border-[#D4A346] flex items-center justify-center text-3xl font-black text-black mx-auto shadow-lg">
+                  Z
                 </div>
-                <h2 className="text-lg font-black text-white">MAGNERSKING IPTVX</h2>
-                <p className="text-xs text-zinc-400">Logga in för att synka dina smarta mappar och ladda din spellista.</p>
+                <h2 className="text-lg font-black text-white">ZAPPAPORTALEN</h2>
+                <p className="text-xs text-zinc-400">Logga in på zappaportalen.se för att synka dina smarta mappar och ladda din spellista.</p>
                 <button
                   onClick={() => setAuthModal(true)}
                   style={{ backgroundColor: accentColor }}
-                  className="w-full text-white font-extrabold px-5 py-3 rounded-2xl text-xs shadow-lg"
+                  className="w-full text-black font-extrabold px-5 py-3 rounded-2xl text-xs shadow-lg"
                 >
                   Logga in nu
                 </button>
@@ -2443,9 +2690,9 @@
             </div>
           )}
 
-          {/* FLYTANDE MINI-PLAYER NERE TILL HÖGER NÄR MAN BLÄDDRAR RUNT */}
+          {/* FLYTANDE MINI-PLAYER */}
           {user && currentMedia && !isFullscreenPlayer && (
-            <div className="fixed bottom-16 sm:bottom-6 left-4 sm:left-6 z-40 w-72 sm:w-80 rounded-2xl bg-[#111215]/95 backdrop-blur-xl border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex items-center gap-3 p-2.5">
+            <div className="fixed bottom-16 sm:bottom-6 left-4 sm:left-6 z-40 w-72 sm:w-80 rounded-2xl bg-[#111215]/95 backdrop-blur-xl border border-[#F3D078]/40 shadow-[0_20px_50px_rgba(0,0,0,0.9)] overflow-hidden flex items-center gap-3 p-2.5">
               <div
                 onClick={() => setIsFullscreenPlayer(true)}
                 className="w-12 h-12 rounded-xl bg-black border border-white/10 flex items-center justify-center shrink-0 cursor-pointer relative overflow-hidden"
@@ -2453,12 +2700,12 @@
                 {currentMedia.logo ? (
                   <img src={currentMedia.logo} alt="" className="max-w-full max-h-full object-contain" />
                 ) : (
-                  <span className="text-xs font-black text-[#E50914]">▶</span>
+                  <span className="text-xs font-black text-[#F3D078]">▶</span>
                 )}
               </div>
               <div onClick={() => setIsFullscreenPlayer(true)} className="min-w-0 flex-1 cursor-pointer">
-                <span className="text-[9px] font-black uppercase text-[#E50914] flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#E50914] live-dot" />
+                <span className="text-[9px] font-black uppercase text-[#F3D078] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#F3D078] live-dot" />
                   SPELAR NU
                 </span>
                 <p className="text-xs font-extrabold text-white truncate">{currentMedia.name}</p>
@@ -2480,35 +2727,36 @@
             </div>
           )}
 
-          {/* RÖD RUNDA SVÄVANDE MENYKNAPP NERE TILL HÖGER (SOM I IPTVX SKÄRMDUMPARNA) */}
+          {/* AIK-GUL RUNDA SVÄVANDE MENYKNAPP */}
           {user && (
             <button
               onClick={() => setQuickDrawer(!quickDrawer)}
               style={{ backgroundColor: accentColor }}
-              className="fixed bottom-16 sm:bottom-6 right-5 z-40 w-14 h-14 rounded-full text-white flex items-center justify-center text-2xl font-black shadow-[0_8px_30px_rgba(229,9,20,0.6)] hover:scale-105 transition"
+              className="fixed bottom-16 sm:bottom-6 right-5 z-40 w-14 h-14 rounded-full text-black flex items-center justify-center text-2xl font-black shadow-[0_8px_30px_rgba(243,208,120,0.5)] hover:scale-105 transition"
               title="Snabbmeny"
             >
               {quickDrawer ? '✕' : '☰'}
             </button>
           )}
 
-          {/* SNABBMENY-POPUP FRÅN DEN RÖDA KNAPPEN */}
+          {/* SNABBMENY-POPUP */}
           {quickDrawer && (
-            <div className="fixed bottom-32 sm:bottom-24 right-5 z-40 w-64 rounded-2xl bg-[#121316]/95 backdrop-blur-xl border border-white/15 p-3 space-y-1.5 shadow-2xl">
-              <div className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 px-3 py-1">
-                Snabbnavigering
+            <div className="fixed bottom-32 sm:bottom-24 right-5 z-40 w-64 rounded-2xl bg-[#121316]/95 backdrop-blur-xl border border-[#F3D078]/30 p-3 space-y-1.5 shadow-2xl">
+              <div className="text-[10px] font-extrabold uppercase tracking-widest text-[#F3D078] px-3 py-1">
+                Zappaportalen Snabbval
               </div>
               {[
                 { label: '🔍 Sök i hela katalogen', action: () => { setSearchModal(true); setQuickDrawer(false); } },
                 { label: '★ Dina Smarta Mappar', action: () => { setManageFavModal(true); setQuickDrawer(false); } },
                 { label: '📂 Ladda M3U / EPG', action: () => { setActiveTab('settings'); setSettingsSubView('sources'); setQuickDrawer(false); } },
+                { label: '🎞️ Gå till VOD-kanaler', action: () => { setActiveTab('vod_channels'); setIsFullscreenPlayer(false); setQuickDrawer(false); } },
                 { label: '📺 Gå till Live TV', action: () => { setActiveTab('live'); setIsFullscreenPlayer(false); setQuickDrawer(false); } },
                 { label: '📅 Gå till TV-guide', action: () => { setActiveTab('epg'); setIsFullscreenPlayer(false); setQuickDrawer(false); } }
               ].map((item, idx) => (
                 <button
                   key={idx}
                   onClick={item.action}
-                  className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-[#E50914] transition block"
+                  className="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold text-white hover:bg-[#F3D078] hover:text-black transition block"
                 >
                   {item.label}
                 </button>
@@ -2516,27 +2764,30 @@
             </div>
           )}
 
-          {/* DETALJ- & AVSNITTS-MODAL FÖR SERIER OCH FILMER */}
+          {/* DETALJ- & AVSNITTS-MODAL */}
           {detailItem && (
             <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-50 flex items-center justify-center p-4 overflow-y-auto">
               <div className="bg-[#121316] border border-white/15 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl my-auto">
-                <div className="relative h-56 sm:h-64 bg-zinc-900 flex items-end p-6">
+                <div className="relative h-56 sm:h-64 bg-zinc-900 flex items-end p-6 overflow-hidden">
                   {detailItem.logo && (
-                    <img src={detailItem.logo} alt="" className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                    <>
+                      <img src={detailItem.logo} alt="" className="absolute inset-0 w-full h-full object-cover blur-xl opacity-35" />
+                      <img src={detailItem.logo} alt="" className="absolute inset-0 w-full h-full object-contain p-3 opacity-80" />
+                    </>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-[#121316] via-[#121316]/50 to-transparent" />
                   <button
                     onClick={() => setDetailItem(null)}
-                    className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/70 text-white flex items-center justify-center text-sm font-bold"
+                    className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/70 text-white flex items-center justify-center text-sm font-bold"
                   >
                     ✕
                   </button>
                   <div className="relative z-10 space-y-2 w-full">
                     <div className="flex items-center gap-2">
-                      <span style={{ backgroundColor: accentColor }} className="text-[10px] font-black uppercase px-2 py-0.5 rounded text-white">
+                      <span style={{ backgroundColor: accentColor }} className="text-[10px] font-black uppercase px-2 py-0.5 rounded text-black">
                         {detailItem.isSeriesShow ? 'SERIE' : 'DETALJER'}
                       </span>
-                      <span className="text-xs text-amber-400 font-bold">★ {detailItem.rating || '8,1'}</span>
+                      <span className="text-xs text-[#F3D078] font-bold">★ {detailItem.rating || '8,1'}</span>
                       <span className="text-xs text-zinc-400">{detailItem.group}</span>
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-black text-white">{detailItem.name}</h2>
@@ -2550,7 +2801,8 @@
                         const firstTarget = detailItem.isSeriesShow ? detailItem.episodes[0] : detailItem;
                         startPlayback(firstTarget, true);
                       }}
-                      className="bg-white hover:bg-zinc-200 text-black font-extrabold px-6 py-3 rounded-full text-xs flex items-center gap-2"
+                      style={{ backgroundColor: accentColor }}
+                      className="hover:brightness-110 text-black font-extrabold px-6 py-3 rounded-full text-xs flex items-center gap-2"
                     >
                       <span>▶</span>
                       <span>{detailItem.isSeriesShow ? 'Spela Avsnitt 1' : 'Spela upp nu'}</span>
@@ -2558,7 +2810,7 @@
 
                     <button
                       onClick={() => setFavModalItem(detailItem)}
-                      className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-5 py-3 rounded-full text-xs border border-white/10"
+                      className="bg-zinc-800 hover:bg-zinc-700 text-[#F3D078] font-bold px-5 py-3 rounded-full text-xs border border-white/10"
                     >
                       ★ Lägg i Favoriter
                     </button>
@@ -2571,7 +2823,6 @@
                     </button>
                   </div>
 
-                  {/* Om det är en serie med flera avsnitt */}
                   {detailItem.isSeriesShow && detailItem.episodes?.length > 0 && (
                     <div className="space-y-3 pt-2 border-t border-white/10">
                       <div className="flex items-center justify-between">
@@ -2608,7 +2859,7 @@
                                 <span className="text-xs font-black text-zinc-500 w-6">{ep.episode || idx + 1}.</span>
                                 <span className="text-xs font-bold text-white truncate">{ep.name}</span>
                               </div>
-                              <span className="text-xs font-extrabold text-[#E50914] shrink-0">▶ Spela</span>
+                              <span className="text-xs font-extrabold text-[#F3D078] shrink-0">▶ Spela</span>
                             </div>
                           ))}
                       </div>
@@ -2629,10 +2880,10 @@
                     <input
                       type="text"
                       autoFocus
-                      placeholder="Sök efter kanaler, filmer, serier eller kategorier..."
+                      placeholder="Sök efter kanaler, VOD-kanaler, filmer eller serier..."
                       value={globalSearch}
                       onChange={(e) => setGlobalSearch(e.target.value)}
-                      className="w-full bg-zinc-900 border border-white/20 focus:border-[#E50914] rounded-2xl pl-11 pr-4 py-3.5 text-sm text-white outline-none"
+                      className="w-full bg-zinc-900 border border-white/20 focus:border-[#F3D078] rounded-2xl pl-11 pr-4 py-3.5 text-sm text-white outline-none"
                     />
                   </div>
                   <button
@@ -2651,17 +2902,19 @@
                         setSearchModal(false);
                         handleCardSelect(item);
                       }}
-                      className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 hover:border-[#E50914] cursor-pointer flex items-center gap-3 transition"
+                      className="p-3 rounded-2xl bg-zinc-900/90 border border-white/10 hover:border-[#F3D078] cursor-pointer flex items-center gap-3 transition"
                     >
                       <div className="w-11 h-11 rounded-xl bg-black flex items-center justify-center p-1 shrink-0 overflow-hidden">
                         {item.logo ? (
                           <img src={item.logo} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
                         ) : (
-                          <span className="text-xs font-bold text-[#E50914]">▶</span>
+                          <span className="text-xs font-bold text-[#F3D078]">▶</span>
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="text-[9px] font-black uppercase text-amber-400 block">{item.type}</span>
+                        <span className="text-[9px] font-black uppercase text-[#F3D078] block">
+                          {item.type === 'vod_channel' ? 'VOD-KANAL' : item.type}
+                        </span>
                         <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
                         <p className="text-[10px] text-zinc-400 truncate">{item.group}</p>
                       </div>
@@ -2675,11 +2928,11 @@
           {/* INLOGGNINGS-MODAL */}
           {authModal && (
             <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-50 flex items-center justify-center p-4">
-              <div className="bg-[#111215] border border-white/15 rounded-3xl w-full max-w-sm p-7 space-y-5 shadow-2xl">
+              <div className="bg-[#111215] border border-[#F3D078]/40 rounded-3xl w-full max-w-sm p-7 space-y-5 shadow-2xl">
                 <div className="flex justify-between items-center border-b border-white/10 pb-4">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-xl">👑</span>
-                    <h3 className="font-extrabold text-base text-white">{isSignUp ? 'Skapa Royal-konto' : 'Logga in i MAGNERSKING'}</h3>
+                    <div className="w-7 h-7 rounded-full bg-[#F3D078] text-black font-black text-xs flex items-center justify-center">Z</div>
+                    <h3 className="font-extrabold text-base text-white">{isSignUp ? 'Skapa konto på Zappaportalen' : 'Logga in i Zappaportalen'}</h3>
                   </div>
                   {user && (
                     <button onClick={() => setAuthModal(false)} className="text-sm font-bold text-zinc-400 hover:text-white">
@@ -2690,7 +2943,7 @@
 
                 <div className="p-3.5 bg-black/60 border border-white/10 rounded-2xl">
                   <p className="text-[11px] text-zinc-400 leading-relaxed text-center">
-                    <strong className="text-amber-400">Användarvillkor:</strong> Denna applikation tillhandahåller enbart en mediaspelare. Användaren ansvarar fullt ut för att endast använda lagliga M3U-filer och strömmar.
+                    <strong className="text-[#F3D078]">Användarvillkor (zappaportalen.se):</strong> Zappaportalen tillhandahåller enbart en neutral mediaspelare. Användaren ansvarar fullt ut för att endast använda lagliga M3U-filer och strömmar.
                   </p>
                 </div>
 
@@ -2701,7 +2954,7 @@
                     defaultValue={savedEmailDefault}
                     placeholder="E-postadress"
                     autoComplete="email"
-                    className="w-full bg-black border border-white/15 focus:border-[#E50914] rounded-2xl px-4 py-3 text-xs text-white outline-none"
+                    className="w-full bg-black border border-white/15 focus:border-[#F3D078] rounded-2xl px-4 py-3 text-xs text-white outline-none"
                     required
                   />
                   <input
@@ -2709,19 +2962,19 @@
                     type="password"
                     placeholder="Lösenord"
                     autoComplete="current-password"
-                    className="w-full bg-black border border-white/15 focus:border-[#E50914] rounded-2xl px-4 py-3 text-xs text-white outline-none"
+                    className="w-full bg-black border border-white/15 focus:border-[#F3D078] rounded-2xl px-4 py-3 text-xs text-white outline-none"
                     required
                   />
                   <button
                     type="submit"
                     style={{ backgroundColor: accentColor }}
-                    className="w-full text-white font-extrabold py-3 rounded-2xl text-xs shadow-lg transition hover:brightness-110"
+                    className="w-full text-black font-extrabold py-3 rounded-2xl text-xs shadow-lg transition hover:brightness-110"
                   >
                     {isSignUp ? 'Registrera Konto' : 'Logga in'}
                   </button>
                 </form>
                 <div className="text-center pt-1">
-                  <button onClick={() => setIsSignUp(!isSignUp)} className="text-xs text-amber-400 hover:underline font-semibold">
+                  <button onClick={() => setIsSignUp(!isSignUp)} className="text-xs text-[#F3D078] hover:underline font-semibold">
                     {isSignUp ? 'Har du redan konto? Logga in' : 'Inget konto? Skapa ett här'}
                   </button>
                 </div>
@@ -2732,9 +2985,9 @@
           {/* LÄGG TILL I FAVORITMAPP-MODAL */}
           {favModalItem && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-              <div className="bg-[#121316] border border-white/20 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+              <div className="bg-[#121316] border border-[#F3D078]/40 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
                 <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                  <h3 className="font-extrabold text-sm text-white">★ Lägg till i Favoritmapp</h3>
+                  <h3 className="font-extrabold text-sm text-[#F3D078]">★ Lägg till i Favoritmapp</h3>
                   <button onClick={() => setFavModalItem(null)} className="text-sm font-bold text-zinc-400">
                     ✕
                   </button>
@@ -2747,11 +3000,11 @@
                         key={list.id}
                         onClick={() => toggleChannelInFavList(list.id, favModalItem.id)}
                         className={`p-3.5 rounded-2xl border flex justify-between items-center cursor-pointer transition ${
-                          checked ? 'bg-red-950/60 border-[#E50914] text-white' : 'bg-black/50 border-white/10 text-zinc-300'
+                          checked ? 'bg-amber-950/60 border-[#F3D078] text-white' : 'bg-black/50 border-white/10 text-zinc-300'
                         }`}
                       >
                         <span className="text-xs font-bold">★ {list.name}</span>
-                        <span className="text-xs font-extrabold text-amber-400">{checked ? '✓ Tillagd' : '+ Välj'}</span>
+                        <span className="text-xs font-extrabold text-[#F3D078]">{checked ? '✓ Tillagd' : '+ Välj'}</span>
                       </div>
                     );
                   })}
@@ -2763,16 +3016,16 @@
           {/* HANTERA SMARTA FAVORITMAPPAR-MODAL */}
           {manageFavModal && (
             <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-              <div className="bg-[#121316] border border-white/20 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl">
+              <div className="bg-[#121316] border border-[#F3D078]/40 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl">
                 <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                  <h3 className="font-extrabold text-base text-white">👑 Smarta Favoritmappar</h3>
+                  <h3 className="font-extrabold text-base text-[#F3D078]">👑 Smarta Favoritmappar</h3>
                   <button onClick={() => setManageFavModal(false)} className="text-sm font-bold text-zinc-400 hover:text-white">
                     ✕
                   </button>
                 </div>
 
                 <form onSubmit={handleCreateFavList} className="space-y-3.5 bg-black/60 p-4 rounded-2xl border border-white/10">
-                  <p className="text-xs text-amber-400 font-bold">Skapa ny mapp (Manuell eller Auto-regel):</p>
+                  <p className="text-xs text-[#F3D078] font-bold">Skapa ny mapp (Manuell eller Auto-regel):</p>
                   <input
                     type="text"
                     placeholder="1. Namn på favoritmappen (t.ex. Sverige FHD)"
@@ -2801,7 +3054,7 @@
                   <button
                     type="submit"
                     style={{ backgroundColor: accentColor }}
-                    className="w-full text-white font-extrabold py-2.5 rounded-xl text-xs shadow-lg"
+                    className="w-full text-black font-extrabold py-2.5 rounded-xl text-xs shadow-lg"
                   >
                     + Skapa & Synka Smart Mapp
                   </button>
@@ -2817,7 +3070,7 @@
                             ★ {list.name} ({items.length} st)
                           </span>
                           {(list.filter || (list.filterGroup && list.filterGroup !== 'ALL')) && (
-                            <span className="text-[10px] text-amber-400">
+                            <span className="text-[10px] text-[#F3D078]">
                               Regel: {list.filterGroup && list.filterGroup !== 'ALL' ? list.filterGroup : 'Alla'}{' '}
                               {list.filter ? `+ "${list.filter}"` : ''}
                             </span>
@@ -2834,15 +3087,16 @@
             </div>
           )}
 
-          {/* MOBIL BOTTENMENY (SYNS PÅ MOBIL/SURFPLATTA FÖR ÄKTA APP-KÄNSLA) */}
+          {/* MOBIL BOTTENMENY */}
           {user && (
-            <nav className="sm:hidden fixed bottom-0 left-0 right-0 h-14 bg-black/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around z-30 px-2">
+            <nav className="sm:hidden fixed bottom-0 left-0 right-0 h-14 bg-black/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around z-30 px-1">
               {[
                 { id: 'home', label: 'För dig', icon: '🏠' },
-                { id: 'movies', label: 'Film', icon: '🎬' },
-                { id: 'series', label: 'Serie', icon: '🍿' },
+                { id: 'movies', label: 'Filmer', icon: '🎬' },
+                { id: 'series', label: 'Serier', icon: '🍿' },
+                { id: 'vod_channels', label: 'VOD-TV', icon: '🎞️' },
                 { id: 'live', label: 'Live', icon: '📺' },
-                { id: 'epg', label: 'TV-guide', icon: '📅' },
+                { id: 'epg', label: 'Guide', icon: '📅' },
                 { id: 'settings', label: 'Meny', icon: '⚙️' }
               ].map((t) => {
                 const active = activeTab === t.id && !isFullscreenPlayer;
@@ -2854,12 +3108,12 @@
                       setExpandedCategory(null);
                       setIsFullscreenPlayer(false);
                     }}
-                    className={`flex flex-col items-center justify-center py-1 px-2 ${
-                      active ? 'text-[#E50914] font-extrabold' : 'text-zinc-400'
+                    className={`flex flex-col items-center justify-center py-1 px-1.5 ${
+                      active ? 'text-[#F3D078] font-extrabold' : 'text-zinc-400'
                     }`}
                   >
-                    <span className="text-base leading-none">{t.icon}</span>
-                    <span className="text-[9px] mt-1">{t.label}</span>
+                    <span className="text-sm leading-none">{t.icon}</span>
+                    <span className="text-[8px] mt-1">{t.label}</span>
                   </button>
                 );
               })}
