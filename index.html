@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -14,23 +14,24 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS (OBS: Play-CDN:en är inte avsedd för produktion och kan inte versionslåsas med SRI; byt till Tailwind-bygge via Vite senare) -->
   <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- HLS.js, MPEGTS.js & Pako (för .xml.gz EPG-uppackning i alla webbläsare) -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+  <!-- Versionslåsta 2026-11-04 med SRI-hash (sha384). Vid uppgradering: byt version OCH räkna om integrity-hashen. -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js" integrity="sha384-p9vgU/7IYJWd3I4STrtqxqR/2cAQlhIX7D/HrTnIMEjjcUox165b7se7sxmm3zDg" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.js" integrity="sha384-sQp+4cJv0jChNCYvgy6W0RSfQZB/w6d3ZTDoIBlY4Uorfw4PLS56T2yM2z47bSkl" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js" integrity="sha384-rNlaE5fs9dGIjmxWDALQh/RBAaGRYT5ChrzHo6tRfgrZ36iRFAiquP5g41Jsv+0j" crossorigin="anonymous"></script>
   
   <!-- Supabase JS Client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js" integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" crossorigin="anonymous"></script>
   
   <!-- React & ReactDOM -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
   
   <!-- Babel -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@8.1.1/babel.min.js" integrity="sha384-r5Ldzi45mT2cLBHDFFiSsTooTu4rFdkBdx9D50zWqSmJ8FLuJkQQTF7h6ERx/NX0" crossorigin="anonymous"></script>
 
   <!-- 
     ============================================================================
@@ -53,7 +54,15 @@
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
+    }
+    /* Markering spärras bara på knappar, navigering och spelarkontroller – text och inmatningsfält går att markera/kopiera */
+    button, nav, [role="button"], video, .select-none {
+      -webkit-user-select: none;
       user-select: none;
+    }
+    input, textarea, select, [contenteditable="true"] {
+      -webkit-user-select: text;
+      user-select: text;
     }
     body, html {
       margin: 0;
@@ -271,7 +280,7 @@
           error_type: String(type || 'error'),
           error_message: String(message || 'Okänt fel').substring(0, 1000),
           error_stack: String(stack || '').substring(0, 3000),
-          url: window.location.href,
+          url: window.location.origin + window.location.pathname, // utan query/hash (kan innehålla inloggningstoken)
           user_agent: navigator.userAgent,
           platform: navigator.platform || 'unknown',
           screen_size: `${window.innerWidth}x${window.innerHeight}`,
@@ -321,23 +330,23 @@
     // --- DEMODATA INNAN SPELLISTA LADDAS ---
     const INITIAL_CHANNELS = [
       {
-        id: 'ch_demo_svt1',
-        tvgId: 'svt1.svt.se',
-        name: 'SVT 1 SE FHD',
+        id: 'ch_demo_1',
+        tvgId: 'demo1.zappaportalen',
+        name: 'Demo 1 FHD',
         group: 'Sweden',
         quality: 'FHD',
-        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/SVT1_logo_2016.svg/512px-SVT1_logo_2016.svg.png',
+        logo: '',
         url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
         type: 'live',
         addedOrder: 1
       },
       {
-        id: 'ch_demo_tv4',
-        tvgId: 'tv4.se',
-        name: 'TV4 SE FHD',
+        id: 'ch_demo_2',
+        tvgId: 'demo2.zappaportalen',
+        name: 'Demo 2 FHD',
         group: 'Sweden',
         quality: 'FHD',
-        logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/TV4_logo_2018.svg/512px-TV4_logo_2018.svg.png',
+        logo: '',
         url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
         type: 'live',
         addedOrder: 2
